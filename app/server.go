@@ -22,15 +22,17 @@ func main() {
 
 	buf := make([]byte, 128)
 
-	_, err = c.Read(buf)
-	if err != nil {
-		fmt.Println("Error reading data from connection: ", err.Error())
-		os.Exit(1)
-	}
+	for {
+		_, err = c.Read(buf)
+		if err != nil {
+			fmt.Println("Error reading data from connection: ", err.Error())
+			os.Exit(1)
+		}
 
-	_, err = c.Write([]byte("+PONG\r\n"))
-	if err != nil {
-		fmt.Println("Error writing data to connection: ", err.Error())
-		os.Exit(1)
+		_, err = c.Write([]byte("+PONG\r\n"))
+		if err != nil {
+			fmt.Println("Error writing data to connection: ", err.Error())
+			os.Exit(1)
+		}
 	}
 }
