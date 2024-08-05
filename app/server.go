@@ -9,6 +9,21 @@ import (
 	"strings"
 )
 
+type Type byte
+
+const (
+	array      Type = '*'
+	bulkString Type = '$'
+)
+
+type application struct {
+	commands map[string]*command
+}
+
+type client struct {
+	mapData map[string][]byte
+}
+
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
@@ -17,22 +32,26 @@ func main() {
 	}
 	defer l.Close()
 
+	app := &application{
+		commands: getCommands(),
+	}
+
 	for {
-		c, err := l.Accept()
+		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
 			continue
 		}
 
-		data := &appData{
-			mapData: map[string]any{},
+		client := &client{
+			mapData: map[string][]byte{},
 		}
 
-		go handleClient(c, data)
+		go app.handleClient(conn, client)
 	}
 }
 
-func handleClient(conn net.Conn, data *appData) {
+func (app *application) handleClient(conn net.Conn, client *client) {
 	for {
 		buf := make([]byte, 128)
 		_, err := conn.Read(buf)
@@ -43,11 +62,14 @@ func handleClient(conn net.Conn, data *appData) {
 
 		fmt.Println("Values read: ", strings.Split(string(buf), "\r\n"))
 
-		parseInputBuffer(buf, conn, data)
+		err = app.parseInputBuffer(buf, conn, client)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
 	}
 }
 
-func parseInputBuffer(buf []byte, conn net.Conn, data *appData) error {
+func (app *application) parseInputBuffer(buf []byte, conn net.Conn, client *client) error {
 	if len(buf) == 0 {
 		return errors.New("empty input buffer")
 	}
@@ -56,127 +78,23 @@ func parseInputBuffer(buf []byte, conn net.Conn, data *appData) error {
 		return errors.New("input only contains data type information, but no data")
 	}
 
-	switch buf[0] {
-	case '*':
+	var t Type = Type(buf[0])
+	switch t {
+	case array:
 		splitBuf := bytes.Split(buf, []byte("\r\n"))
 
 		if len(splitBuf) == 1 {
 			return errors.New("input data is an array, but does not contain actual data")
 		}
 
-		comm := newCommand(splitBuf[1:])
-		fmt.Println("Command: ", comm)
+		name, args := parseCommand(splitBuf[1:])
 
-		handleCommamd(comm, conn, data)
-	}
-	return nil
-}
-
-type command struct {
-	Command string
-	Args    []any
-}
-
-type appData struct {
-	mapData map[string]any
-}
-
-func newCommand(buf [][]byte) *command {
-	comm := &command{
-		Command: string(buf[1]),
-	}
-
-	if len(buf) > 2 {
-		args := make([]any, 0, (len(buf)-2)/2)
-		for idx, piece := range buf {
-			if idx < 2 {
-				continue
-			}
-			if idx%2 != 0 {
-				args = append(args, string(piece))
-			}
-		}
-		comm.Args = args
-	}
-
-	return comm
-}
-
-func handleCommamd(c *command, conn net.Conn, data *appData) error {
-	switch strings.ToLower(c.Command) {
-	case "echo":
-		if len(c.Args) == 1 {
-			_, err := conn.Write([]byte(fmt.Sprintf("+%s\r\n", c.Args...)))
-			if err != nil {
-				fmt.Println("Error writing data to connection: ", err.Error())
-			}
-
-			break
-		}
-
-		return errors.New("command echo must take one argument")
-
-	case "ping":
-		_, err := conn.Write([]byte("+PONG\r\n"))
+		comm, err := app.findCommand(name)
 		if err != nil {
-			fmt.Println("Error writing data to connection: ", err.Error())
+			return err
 		}
 
-	case "get":
-		if len(c.Args) == 1 {
-			key, ok := c.Args[0].(string)
-			if !ok {
-				return errors.New("key arg is not a string")
-			}
-
-			val, ok := data.mapData[key]
-			if !ok {
-				_, err := conn.Write([]byte("$-1\r\n"))
-				if err != nil {
-					fmt.Println("Error writing data to connection: ", err.Error())
-				}
-
-				break
-			}
-
-			strVal, ok := val.(string)
-			if !ok {
-				_, err := conn.Write([]byte("$-1\r\n"))
-				if err != nil {
-					fmt.Println("Error writing data to connection: ", err.Error())
-				}
-
-				break
-			}
-
-			encoded := fmt.Sprintf("$%d\r\n%v\r\n", len(strVal), strVal)
-			_, err := conn.Write([]byte(encoded))
-			if err != nil {
-				fmt.Println("Error writing data to connection: ", err.Error())
-			}
-
-			break
-		}
-
-		return errors.New("command get must take one argument")
-
-	case "set":
-		if len(c.Args) == 2 {
-			key, ok := c.Args[0].(string)
-			if !ok {
-				return errors.New("key arg is not a string")
-			}
-			data.mapData[key] = c.Args[1]
-			_, err := conn.Write([]byte("+OK\r\n"))
-			if err != nil {
-				fmt.Println("Error writing data to connection: ", err.Error())
-			}
-
-			break
-		}
-
-		return errors.New("command set accepts two arguments")
+		comm.callback(conn, client, args)
 	}
-
 	return nil
 }
