@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -21,9 +22,12 @@ type application struct {
 }
 
 func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	port := flag.Int("port", 6379, "Server port number")
+	flag.Parse()
+
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", *port))
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
+		fmt.Println("Failed to bind to port ", *port)
 		os.Exit(1)
 	}
 	defer l.Close()
