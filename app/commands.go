@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type command struct {
@@ -92,16 +94,28 @@ func handleCommandGet(conn net.Conn, client *client, args [][]byte) error {
 		return errors.New("command get must take one argument")
 	}
 
-	val, ok := client.mapData[string(args[0])]
-	if !ok {
-		_, err := conn.Write([]byte("$-1\r\n"))
+	nullBulkString := []byte("$-1\r\n")
 
+	expVal, ok := client.mapData[string(args[0])]
+	if !ok {
+		_, err := conn.Write(nullBulkString)
 		if err != nil {
 			return err
 		}
+
+		return nil
 	}
 
-	encoded := fmt.Sprintf("$%d\r\n%v\r\n", len(val), string(val))
+	if expVal.hasExpired() {
+		_, err := conn.Write(nullBulkString)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	encoded := fmt.Sprintf("$%d\r\n%v\r\n", len(expVal.val), string(expVal.val))
 
 	_, err := conn.Write([]byte(encoded))
 	if err != nil {
@@ -112,13 +126,36 @@ func handleCommandGet(conn net.Conn, client *client, args [][]byte) error {
 }
 
 func handleCommandSet(conn net.Conn, client *client, args [][]byte) error {
-	if len(args) != 2 {
+	if len(args) < 2 {
 		return errors.New("command set accepts two arguments")
+	}
+
+	if len(args)%2 != 0 {
+		return errors.New("invalid arguments list, must come in pairs")
 	}
 
 	key := string(args[0])
 
-	client.mapData[key] = args[1]
+	expVal := expiringValue{
+		val:     args[1],
+		created: time.Now().UTC(),
+	}
+
+	if len(args) > 2 {
+		extraArg := string(args[2])
+		if !strings.EqualFold(extraArg, "px") {
+			return fmt.Errorf("unknown extra argument \"%s\"", extraArg)
+		}
+
+		exp, err := strconv.Atoi(string(args[3]))
+		if err != nil {
+			return err
+		}
+
+		expVal.expiresIn = exp
+	}
+
+	client.mapData[key] = expVal
 
 	_, err := conn.Write([]byte("+OK\r\n"))
 	if err != nil {

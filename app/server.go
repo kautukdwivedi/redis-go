@@ -20,10 +20,6 @@ type application struct {
 	commands map[string]*command
 }
 
-type client struct {
-	mapData map[string][]byte
-}
-
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
@@ -44,7 +40,7 @@ func main() {
 		}
 
 		client := &client{
-			mapData: map[string][]byte{},
+			mapData: map[string]expiringValue{},
 		}
 
 		go app.handleClient(conn, client)
