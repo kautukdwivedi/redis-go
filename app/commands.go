@@ -66,7 +66,7 @@ func getCommands() map[string]*command {
 }
 
 func handleCommandPing(conn net.Conn, client *client, args [][]byte) error {
-	_, err := conn.Write([]byte("+PONG\r\n"))
+	_, err := conn.Write(respAsSimpleString("PONG"))
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func handleCommandEcho(conn net.Conn, client *client, args [][]byte) error {
 
 	arg := args[0]
 
-	_, err := conn.Write([]byte(fmt.Sprintf("+%s\r\n", string(arg))))
+	_, err := conn.Write(respAsSimpleString(string(arg)))
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func handleCommandGet(conn net.Conn, client *client, args [][]byte) error {
 		return errors.New("command get must take one argument")
 	}
 
-	nullBulkString := []byte("$-1\r\n")
+	nullBulkString := respAsBulkString("")
 
 	expVal, ok := client.mapData[string(args[0])]
 	if !ok {
@@ -115,9 +115,7 @@ func handleCommandGet(conn net.Conn, client *client, args [][]byte) error {
 		return nil
 	}
 
-	encoded := fmt.Sprintf("$%d\r\n%v\r\n", len(expVal.val), string(expVal.val))
-
-	_, err := conn.Write([]byte(encoded))
+	_, err := conn.Write(respAsBulkString(string(expVal.val)))
 	if err != nil {
 		return err
 	}
@@ -157,7 +155,7 @@ func handleCommandSet(conn net.Conn, client *client, args [][]byte) error {
 
 	client.mapData[key] = expVal
 
-	_, err := conn.Write([]byte("+OK\r\n"))
+	_, err := conn.Write(okSimpleString())
 	if err != nil {
 		return err
 	}
