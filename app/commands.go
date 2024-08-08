@@ -174,11 +174,11 @@ func (s *server) handleCommandInfo(conn net.Conn, client *client, args [][]byte)
 
 	switch ServerInfoSection(args[0]) {
 	case replication:
-		for _, info := range s.replicationInfo() {
-			_, err := conn.Write(respAsBulkString(info))
-			if err != nil {
-				return err
-			}
+		respStr := strings.Join(s.replicationInfo(), "\n")
+
+		_, err := conn.Write(respAsBulkString(respStr))
+		if err != nil {
+			return err
 		}
 	}
 

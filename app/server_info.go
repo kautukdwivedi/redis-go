@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type ServerInfoSection string
 
@@ -9,7 +11,17 @@ const (
 )
 
 func (s *server) replicationInfo() []string {
-	return []string{
+	info := []string{
 		fmt.Sprintf("role:%v", s.role),
 	}
+
+	if s.isMaster() {
+		info = append(info, fmt.Sprintf("master_replid:%v", s.masterReplId))
+
+		if s.masterReplOffset != nil {
+			info = append(info, fmt.Sprintf("master_repl_offset:%v", *s.masterReplOffset))
+		}
+	}
+
+	return info
 }

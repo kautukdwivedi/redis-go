@@ -19,7 +19,13 @@ const (
 )
 
 type server struct {
-	role string
+	role             string
+	masterReplId     string
+	masterReplOffset *int
+}
+
+func (s *server) isMaster() bool {
+	return strings.EqualFold(s.role, "master")
 }
 
 func main() {
@@ -72,6 +78,9 @@ func (s *server) parseReplicaOf(replicaOf string) error {
 		s.role = "slave"
 	} else {
 		s.role = "master"
+		s.masterReplId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+		offset := 0
+		s.masterReplOffset = &offset
 	}
 
 	return nil
