@@ -62,6 +62,10 @@ func getCommands() map[string]*command {
 			name:     "set",
 			callback: handleCommandSet,
 		},
+		"info": {
+			name:     "info",
+			callback: handleCommandInfo,
+		},
 	}
 }
 
@@ -158,6 +162,24 @@ func handleCommandSet(conn net.Conn, client *client, args [][]byte) error {
 	_, err := conn.Write(okSimpleString())
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func handleCommandInfo(conn net.Conn, client *client, args [][]byte) error {
+	if len(args) != 1 {
+		return errors.New("not yet supported")
+	}
+
+	switch ServerInfoSection(args[0]) {
+	case replication:
+		for _, info := range replicationInfo() {
+			_, err := conn.Write(respAsBulkString(info))
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
