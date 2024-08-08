@@ -8,12 +8,8 @@ const (
 	replication ServerInfoSection = "replication"
 )
 
-func replicationInfo() []string {
+func (s *server) replicationInfo() []string {
 	return []string{
-		fmt.Sprintf("role:%v", role()),
+		fmt.Sprintf("role:%v", s.role),
 	}
-}
-
-func role() string {
-	return "master"
 }

@@ -32,8 +32,8 @@ func parseCommand(buf [][]byte) (string, [][]byte) {
 	return string(buf[1]), args
 }
 
-func (app *application) findCommand(name string) (*command, error) {
-	comm, ok := app.commands[strings.ToLower(name)]
+func (app *server) findCommand(name string) (*command, error) {
+	comm, ok := app.getCommands()[strings.ToLower(name)]
 	if !ok {
 		return nil, fmt.Errorf("unknown command: \"%s\"", name)
 	}
@@ -41,35 +41,35 @@ func (app *application) findCommand(name string) (*command, error) {
 	return comm, nil
 }
 
-func getCommands() map[string]*command {
+func (s *server) getCommands() map[string]*command {
 	return map[string]*command{
 		"ping": {
 			name:     "ping",
-			callback: handleCommandPing,
+			callback: s.handleCommandPing,
 		},
 
 		"echo": {
 			name:     "echo",
-			callback: handleCommandEcho,
+			callback: s.handleCommandEcho,
 		},
 
 		"get": {
 			name:     "get",
-			callback: handleCommandGet,
+			callback: s.handleCommandGet,
 		},
 
 		"set": {
 			name:     "set",
-			callback: handleCommandSet,
+			callback: s.handleCommandSet,
 		},
 		"info": {
 			name:     "info",
-			callback: handleCommandInfo,
+			callback: s.handleCommandInfo,
 		},
 	}
 }
 
-func handleCommandPing(conn net.Conn, client *client, args [][]byte) error {
+func (s *server) handleCommandPing(conn net.Conn, client *client, args [][]byte) error {
 	_, err := conn.Write(respAsSimpleString("PONG"))
 	if err != nil {
 		return err
@@ -78,7 +78,7 @@ func handleCommandPing(conn net.Conn, client *client, args [][]byte) error {
 	return nil
 }
 
-func handleCommandEcho(conn net.Conn, client *client, args [][]byte) error {
+func (s *server) handleCommandEcho(conn net.Conn, client *client, args [][]byte) error {
 	if len(args) != 1 {
 		return errors.New("command echo must take one argument")
 	}
@@ -93,7 +93,7 @@ func handleCommandEcho(conn net.Conn, client *client, args [][]byte) error {
 	return nil
 }
 
-func handleCommandGet(conn net.Conn, client *client, args [][]byte) error {
+func (s *server) handleCommandGet(conn net.Conn, client *client, args [][]byte) error {
 	if len(args) != 1 {
 		return errors.New("command get must take one argument")
 	}
@@ -127,7 +127,7 @@ func handleCommandGet(conn net.Conn, client *client, args [][]byte) error {
 	return nil
 }
 
-func handleCommandSet(conn net.Conn, client *client, args [][]byte) error {
+func (s *server) handleCommandSet(conn net.Conn, client *client, args [][]byte) error {
 	if len(args) < 2 {
 		return errors.New("command set accepts two arguments")
 	}
@@ -167,14 +167,14 @@ func handleCommandSet(conn net.Conn, client *client, args [][]byte) error {
 	return nil
 }
 
-func handleCommandInfo(conn net.Conn, client *client, args [][]byte) error {
+func (s *server) handleCommandInfo(conn net.Conn, client *client, args [][]byte) error {
 	if len(args) != 1 {
 		return errors.New("not yet supported")
 	}
 
 	switch ServerInfoSection(args[0]) {
 	case replication:
-		for _, info := range replicationInfo() {
+		for _, info := range s.replicationInfo() {
 			_, err := conn.Write(respAsBulkString(info))
 			if err != nil {
 				return err

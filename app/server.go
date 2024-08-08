@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -17,13 +18,22 @@ const (
 	bulkString Type = '$'
 )
 
-type application struct {
-	commands map[string]*command
+type server struct {
+	role string
 }
 
 func main() {
 	port := flag.Int("port", 6379, "Server port number")
+	replicaOf := flag.String("replicaof", "", "Server, whose slave this instance is.")
 	flag.Parse()
+
+	s := &server{}
+
+	err := s.parseReplicaOf(*replicaOf)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
 
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", *port))
 	if err != nil {
@@ -31,10 +41,6 @@ func main() {
 		os.Exit(1)
 	}
 	defer l.Close()
-
-	app := &application{
-		commands: getCommands(),
-	}
 
 	for {
 		conn, err := l.Accept()
@@ -47,11 +53,31 @@ func main() {
 			mapData: map[string]expiringValue{},
 		}
 
-		go app.handleClient(conn, client)
+		go s.handleClient(conn, client)
 	}
 }
 
-func (app *application) handleClient(conn net.Conn, client *client) {
+func (s *server) parseReplicaOf(replicaOf string) error {
+	if len(replicaOf) > 0 {
+		addrAndPort := strings.Split(replicaOf, " ")
+
+		if len(addrAndPort) != 2 {
+			return errors.New("invalid replica address format")
+		}
+
+		if _, err := strconv.Atoi(addrAndPort[1]); err != nil {
+			return errors.New("invalid replica port")
+		}
+
+		s.role = "slave"
+	} else {
+		s.role = "master"
+	}
+
+	return nil
+}
+
+func (s *server) handleClient(conn net.Conn, client *client) {
 	for {
 		buf := make([]byte, 128)
 		_, err := conn.Read(buf)
@@ -62,14 +88,14 @@ func (app *application) handleClient(conn net.Conn, client *client) {
 
 		fmt.Println("Values read: ", strings.Split(string(buf), "\r\n"))
 
-		err = app.parseInputBuffer(buf, conn, client)
+		err = s.parseInputBuffer(buf, conn, client)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
 	}
 }
 
-func (app *application) parseInputBuffer(buf []byte, conn net.Conn, client *client) error {
+func (s *server) parseInputBuffer(buf []byte, conn net.Conn, client *client) error {
 	if len(buf) == 0 {
 		return errors.New("empty input buffer")
 	}
@@ -89,7 +115,7 @@ func (app *application) parseInputBuffer(buf []byte, conn net.Conn, client *clie
 
 		name, args := parseCommand(splitBuf[1:])
 
-		comm, err := app.findCommand(name)
+		comm, err := s.findCommand(name)
 		if err != nil {
 			return err
 		}
