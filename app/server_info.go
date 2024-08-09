@@ -12,14 +12,14 @@ const (
 
 func (s *server) replicationInfo() []string {
 	info := []string{
-		fmt.Sprintf("role:%v", s.role),
+		fmt.Sprintf("role:%v", s.options.role.string()),
 	}
 
 	if s.isMaster() {
-		info = append(info, fmt.Sprintf("master_replid:%v", s.masterReplId))
+		info = append(info, fmt.Sprintf("master_replid:%v", s.options.masterReplId))
 
-		if s.masterReplOffset != nil {
-			info = append(info, fmt.Sprintf("master_repl_offset:%v", *s.masterReplOffset))
+		if s.options.masterReplOffset >= 0 {
+			info = append(info, fmt.Sprintf("master_repl_offset:%v", s.options.masterReplOffset))
 		}
 	}
 
