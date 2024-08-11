@@ -13,6 +13,7 @@ type server struct {
 
 type serverOptions struct {
 	role             severRole
+	port             int
 	masterHost       string
 	masterPort       int
 	masterReplId     string

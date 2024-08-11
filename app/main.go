@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -16,8 +17,15 @@ func main() {
 	replicaOf := flag.String("replicaof", "", "<MASTER_HOST> <MASTER_PORT>")
 	flag.Parse()
 
+	if port == nil {
+		fmt.Println("Server port is nil")
+		os.Exit(1)
+	}
+
 	s := &server{
-		options: &serverOptions{},
+		options: &serverOptions{
+			port: *port,
+		},
 	}
 
 	err := s.parseReplicaOf(*replicaOf)
@@ -27,38 +35,17 @@ func main() {
 	}
 
 	if s.isSlave() {
-		conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", s.options.masterHost, s.options.masterPort))
-		if err != nil {
-			fmt.Println(err.Error())
-			os.Exit(1)
-		}
-
-		_, err = conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
+		err = s.doHandshakeWithMaster()
 		if err != nil {
 			fmt.Println(err.Error())
 			os.Exit(1)
 		}
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", *port))
+	err = s.listenAndServe()
 	if err != nil {
-		fmt.Println("Failed to bind to port ", *port)
+		fmt.Println(err.Error())
 		os.Exit(1)
-	}
-	defer l.Close()
-
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			continue
-		}
-
-		client := &client{
-			mapData: map[string]expiringValue{},
-		}
-
-		go s.handleClient(conn, client)
 	}
 }
 
@@ -88,13 +75,79 @@ func (s *server) parseReplicaOf(replicaOf string) error {
 	return nil
 }
 
+func (s *server) doHandshakeWithMaster() error {
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", s.options.masterHost, s.options.masterPort))
+	if err != nil {
+		return nil
+	}
+
+	resp, err := respAsArray([]string{"PING"})
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(resp)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(1 * time.Second)
+
+	resp, err = respAsArray([]string{"REPLCONF", "listening-port", strconv.Itoa(s.options.port)})
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(resp)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(1 * time.Second)
+
+	resp, err = respAsArray([]string{"REPLCONF", "capa", "psync2"})
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(resp)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *server) listenAndServe() error {
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", s.options.port))
+	if err != nil {
+		return fmt.Errorf("failed to bind to port %v", s.options.port)
+	}
+	defer l.Close()
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			continue
+		}
+
+		client := &client{
+			mapData: map[string]expiringValue{},
+		}
+
+		go s.handleClient(conn, client)
+	}
+
+}
+
 func (s *server) handleClient(conn net.Conn, client *client) {
 	for {
 		buf := make([]byte, 128)
 		_, err := conn.Read(buf)
 		if err != nil {
 			fmt.Println("Error reading data from connection: ", err.Error())
-			return
+			continue
 		}
 
 		fmt.Println("Values read: ", strings.Split(string(buf), "\r\n"))
