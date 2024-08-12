@@ -66,6 +66,10 @@ func (s *server) getCommands() map[string]*command {
 			name:     "info",
 			callback: s.handleCommandInfo,
 		},
+		"replconf": {
+			name:     "replconf",
+			callback: s.handleCommandReplconf,
+		},
 	}
 }
 
@@ -180,6 +184,15 @@ func (s *server) handleCommandInfo(conn net.Conn, client *client, args [][]byte)
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (s *server) handleCommandReplconf(conn net.Conn, client *client, args [][]byte) error {
+	_, err := conn.Write(okSimpleString())
+	if err != nil {
+		return err
 	}
 
 	return nil
