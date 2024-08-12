@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 )
 
 func main() {
@@ -47,75 +45,6 @@ func main() {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
-}
-
-func (s *server) parseReplicaOf(replicaOf string) error {
-	if len(replicaOf) > 0 {
-		addrAndPort := strings.Split(replicaOf, " ")
-
-		if len(addrAndPort) != 2 {
-			return errors.New("invalid replica address format")
-		}
-
-		port, err := strconv.Atoi(addrAndPort[1])
-		if err != nil {
-			return errors.New("invalid replica port")
-		}
-
-		s.options.role = slave
-		s.options.masterHost = addrAndPort[0]
-		s.options.masterPort = port
-		s.options.masterReplOffset = -1
-	} else {
-		s.options.role = master
-		s.options.masterReplId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
-		s.options.masterReplOffset = 0
-	}
-
-	return nil
-}
-
-func (s *server) doHandshakeWithMaster() error {
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", s.options.masterHost, s.options.masterPort))
-	if err != nil {
-		return nil
-	}
-
-	resp, err := respAsArray([]string{"PING"})
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Write(resp)
-	if err != nil {
-		return err
-	}
-
-	time.Sleep(1 * time.Second)
-
-	resp, err = respAsArray([]string{"REPLCONF", "listening-port", strconv.Itoa(s.options.port)})
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Write(resp)
-	if err != nil {
-		return err
-	}
-
-	time.Sleep(1 * time.Second)
-
-	resp, err = respAsArray([]string{"REPLCONF", "capa", "psync2"})
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Write(resp)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *server) listenAndServe() error {

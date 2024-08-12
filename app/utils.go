@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 func respAsBulkString(resp string) []byte {
@@ -48,4 +49,8 @@ func respAsArray(resp []string) ([]byte, error) {
 
 func carriageReturn() string {
 	return "\r\n"
+}
+
+func sleepSeconds(seconds time.Duration) {
+	time.Sleep(seconds * time.Second)
 }
