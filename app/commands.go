@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -206,6 +207,19 @@ func (s *server) handleCommandPsync(conn net.Conn, client *client, args [][]byte
 	resp := fmt.Sprintf("FULLRESYNC %s %d", s.options.masterReplId, s.options.masterReplOffset)
 
 	_, err := conn.Write(respAsSimpleString(resp))
+	if err != nil {
+		return err
+	}
+
+	sleepSeconds(1)
+
+	emptyFileBase64 := "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="
+	fileData, err := base64.StdEncoding.DecodeString(emptyFileBase64)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(respAsFileData(fileData))
 	if err != nil {
 		return err
 	}

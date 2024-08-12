@@ -47,6 +47,17 @@ func respAsArray(resp []string) ([]byte, error) {
 	return encoded, nil
 }
 
+func respAsFileData(data []byte) []byte {
+	resp := []byte{}
+
+	resp = append(resp, byte(bulkString))
+	resp = append(resp, []byte(strconv.Itoa(len(data)))...)
+	resp = append(resp, []byte(carriageReturn())...)
+	resp = append(resp, data...)
+
+	return resp
+}
+
 func carriageReturn() string {
 	return "\r\n"
 }
