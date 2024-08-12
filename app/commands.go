@@ -70,6 +70,10 @@ func (s *server) getCommands() map[string]*command {
 			name:     "replconf",
 			callback: s.handleCommandReplconf,
 		},
+		"psync": {
+			name:     "psync",
+			callback: s.handleCommandPsync,
+		},
 	}
 }
 
@@ -191,6 +195,17 @@ func (s *server) handleCommandInfo(conn net.Conn, client *client, args [][]byte)
 
 func (s *server) handleCommandReplconf(conn net.Conn, client *client, args [][]byte) error {
 	_, err := conn.Write(okSimpleString())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *server) handleCommandPsync(conn net.Conn, client *client, args [][]byte) error {
+	resp := fmt.Sprintf("FULLRESYNC %s %d", s.options.masterReplId, s.options.masterReplOffset)
+
+	_, err := conn.Write(respAsSimpleString(resp))
 	if err != nil {
 		return err
 	}
