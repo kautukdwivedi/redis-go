@@ -173,6 +173,11 @@ func (s *server) handleCommandSet(conn net.Conn, client *client, args [][]byte) 
 		return err
 	}
 
+	err = s.propagateCommandToReplicas("SET", args)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -223,6 +228,8 @@ func (s *server) handleCommandPsync(conn net.Conn, client *client, args [][]byte
 	if err != nil {
 		return err
 	}
+
+	s.options.replicas = append(s.options.replicas, &conn)
 
 	return nil
 }
