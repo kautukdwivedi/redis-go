@@ -1,10 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -12,28 +12,29 @@ import (
 
 type command struct {
 	name     string
-	callback func(conn net.Conn, client *client, args [][]byte) error
+	callback func(client *ClientV2, args []string) error
 }
 
-func parseCommand(buf [][]byte) (string, [][]byte) {
-	var args [][]byte
-
-	if len(buf) > 2 {
-		args = make([][]byte, 0, (len(buf)-2)/2)
-		for idx, piece := range buf {
-			if idx < 2 {
-				continue
-			}
-			if idx%2 != 0 {
-				args = append(args, piece)
-			}
+func parseCommand(cmdPieces []string) (string, []string) {
+	cleanCmdPieces := make([]string, 0, len(cmdPieces)/2-1)
+	for idx, piece := range cmdPieces {
+		if idx%2 != 0 {
+			cleanCmdPieces = append(cleanCmdPieces, piece)
 		}
 	}
 
-	return string(buf[1]), args
+	fmt.Println("Parsing clean command: ", strings.Join(cleanCmdPieces, ","))
+
+	var args []string
+
+	if len(cleanCmdPieces) > 1 {
+		args = cleanCmdPieces[1:]
+	}
+
+	return string(cleanCmdPieces[0]), args
 }
 
-func (app *server) findCommand(name string) (*command, error) {
+func (app *ServerV2) findCommand(name string) (*command, error) {
 	comm, ok := app.getCommands()[strings.ToLower(name)]
 	if !ok {
 		return nil, fmt.Errorf("unknown command: \"%s\"", name)
@@ -42,7 +43,7 @@ func (app *server) findCommand(name string) (*command, error) {
 	return comm, nil
 }
 
-func (s *server) getCommands() map[string]*command {
+func (s *ServerV2) getCommands() map[string]*command {
 	return map[string]*command{
 		"ping": {
 			name:     "ping",
@@ -78,41 +79,44 @@ func (s *server) getCommands() map[string]*command {
 	}
 }
 
-func (s *server) handleCommandPing(conn net.Conn, client *client, args [][]byte) error {
-	_, err := conn.Write(respAsSimpleString("PONG"))
+func (s *ServerV2) handleCommandPing(client *ClientV2, args []string) error {
+	_, err := client.conn.Write(respAsSimpleString("PONG"))
 	if err != nil {
+		fmt.Println("Received error in PING command: ", err)
 		return err
 	}
 
 	return nil
 }
 
-func (s *server) handleCommandEcho(conn net.Conn, client *client, args [][]byte) error {
+func (s *ServerV2) handleCommandEcho(client *ClientV2, args []string) error {
 	if len(args) != 1 {
 		return errors.New("command echo must take one argument")
 	}
 
-	arg := args[0]
-
-	_, err := conn.Write(respAsSimpleString(string(arg)))
+	_, err := client.conn.Write(respAsSimpleString(args[0]))
 	if err != nil {
+		fmt.Println("Received error in ECHO command: ", err)
 		return err
 	}
 
 	return nil
 }
 
-func (s *server) handleCommandGet(conn net.Conn, client *client, args [][]byte) error {
+func (s *ServerV2) handleCommandGet(client *ClientV2, args []string) error {
 	if len(args) != 1 {
 		return errors.New("command get must take one argument")
 	}
 
 	nullBulkString := respAsBulkString("")
 
-	expVal, ok := client.mapData[string(args[0])]
+	fmt.Println("Getting val for key: ", args[0])
+
+	expVal, ok := client.Get(args[0])
 	if !ok {
-		_, err := conn.Write(nullBulkString)
+		_, err := client.conn.Write(nullBulkString)
 		if err != nil {
+			fmt.Println("Received error in GET command: ", err)
 			return err
 		}
 
@@ -120,23 +124,27 @@ func (s *server) handleCommandGet(conn net.Conn, client *client, args [][]byte) 
 	}
 
 	if expVal.hasExpired() {
-		_, err := conn.Write(nullBulkString)
+		_, err := client.conn.Write(nullBulkString)
 		if err != nil {
+			fmt.Println("Received error in GET1 command: ", err)
 			return err
 		}
 
 		return nil
 	}
 
-	_, err := conn.Write(respAsBulkString(string(expVal.val)))
+	_, err := client.conn.Write(respAsBulkString(string(expVal.val)))
 	if err != nil {
+		fmt.Println("Received error in GET2 command: ", err)
 		return err
 	}
 
 	return nil
 }
 
-func (s *server) handleCommandSet(conn net.Conn, client *client, args [][]byte) error {
+func (s *ServerV2) handleCommandSet(client *ClientV2, args []string) error {
+	fmt.Println("Handlign command set with args: ", args)
+
 	if len(args) < 2 {
 		return errors.New("command set accepts two arguments")
 	}
@@ -153,35 +161,42 @@ func (s *server) handleCommandSet(conn net.Conn, client *client, args [][]byte) 
 	}
 
 	if len(args) > 2 {
-		extraArg := string(args[2])
+		extraArg := args[2]
 		if !strings.EqualFold(extraArg, "px") {
 			return fmt.Errorf("unknown extra argument \"%s\"", extraArg)
 		}
 
-		exp, err := strconv.Atoi(string(args[3]))
+		exp, err := strconv.Atoi(args[3])
 		if err != nil {
+			fmt.Println("Received error in SET command: ", err)
 			return err
 		}
 
 		expVal.expiresIn = exp
 	}
 
-	client.mapData[key] = expVal
+	client.Set(context.Background(), key, expVal)
 
-	_, err := conn.Write(okSimpleString())
-	if err != nil {
-		return err
-	}
+	sleepSeconds(1)
 
-	err = s.propagateCommandToReplicas("SET", args)
-	if err != nil {
-		return err
+	if s.isMaster() {
+		_, err := client.conn.Write(okSimpleString())
+		if err != nil {
+			fmt.Println("Received error in SET1 command: ", err)
+			return err
+		}
+
+		err = s.propagateCommandToReplicas("SET", args)
+		if err != nil {
+			fmt.Println("Received error in SET2 command: ", err)
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (s *server) handleCommandInfo(conn net.Conn, client *client, args [][]byte) error {
+func (s *ServerV2) handleCommandInfo(client *ClientV2, args []string) error {
 	if len(args) != 1 {
 		return errors.New("not yet supported")
 	}
@@ -190,7 +205,7 @@ func (s *server) handleCommandInfo(conn net.Conn, client *client, args [][]byte)
 	case replication:
 		respStr := strings.Join(s.replicationInfo(), "\n")
 
-		_, err := conn.Write(respAsBulkString(respStr))
+		_, err := client.conn.Write(respAsBulkString(respStr))
 		if err != nil {
 			return err
 		}
@@ -199,8 +214,8 @@ func (s *server) handleCommandInfo(conn net.Conn, client *client, args [][]byte)
 	return nil
 }
 
-func (s *server) handleCommandReplconf(conn net.Conn, client *client, args [][]byte) error {
-	_, err := conn.Write(okSimpleString())
+func (s *ServerV2) handleCommandReplconf(client *ClientV2, args []string) error {
+	_, err := client.conn.Write(okSimpleString())
 	if err != nil {
 		return err
 	}
@@ -208,10 +223,10 @@ func (s *server) handleCommandReplconf(conn net.Conn, client *client, args [][]b
 	return nil
 }
 
-func (s *server) handleCommandPsync(conn net.Conn, client *client, args [][]byte) error {
-	resp := fmt.Sprintf("FULLRESYNC %s %d", s.options.masterReplId, s.options.masterReplOffset)
+func (s *ServerV2) handleCommandPsync(client *ClientV2, args []string) error {
+	resp := fmt.Sprintf("FULLRESYNC %s %d", s.masterReplId, s.masterReplOffset)
 
-	_, err := conn.Write(respAsSimpleString(resp))
+	_, err := client.conn.Write(respAsSimpleString(resp))
 	if err != nil {
 		return err
 	}
@@ -224,12 +239,13 @@ func (s *server) handleCommandPsync(conn net.Conn, client *client, args [][]byte
 		return err
 	}
 
-	_, err = conn.Write(respAsFileData(fileData))
+	_, err = client.conn.Write(respAsFileData(fileData))
 	if err != nil {
 		return err
 	}
 
-	s.options.replicas = append(s.options.replicas, &conn)
+	fmt.Println("Adding replica...")
+	s.replicas = append(s.replicas, &client.conn)
 
 	return nil
 }

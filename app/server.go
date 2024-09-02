@@ -17,7 +17,7 @@ type server struct {
 }
 
 type serverOptions struct {
-	role             severRole
+	role             ServerRole
 	port             int
 	masterHost       string
 	masterPort       int

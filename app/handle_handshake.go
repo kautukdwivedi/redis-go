@@ -6,46 +6,46 @@ import (
 	"strconv"
 )
 
-func (s *server) doHandshakeWithMaster() error {
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", s.options.masterHost, s.options.masterPort))
+func (s *ServerV2) doHandshakeWithMaster() (net.Conn, error) {
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", s.masterHost, s.masterPort))
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	resp, err := respAsArray([]string{"PING"})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = conn.Write(resp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sleepSeconds(1)
 
-	err = writeCommandWithArgs(conn, "REPLCONF", "listening-port", strconv.Itoa(s.options.port))
+	err = writeCommandWithArgs(conn, "REPLCONF", "listening-port", strconv.Itoa(s.port))
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	sleepSeconds(1)
 
 	err = writeCommandWithArgs(conn, "REPLCONF", "capa", "psync2")
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	sleepSeconds(1)
 
-	err = writeCommandWithArgs(conn, "PSYNC", s.options.masterReplId, strconv.Itoa(s.options.masterReplOffset))
+	err = writeCommandWithArgs(conn, "PSYNC", s.masterReplId, strconv.Itoa(s.masterReplOffset))
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	sleepSeconds(1)
 
-	return nil
+	return conn, nil
 }
 
 func writeCommandWithArgs(conn net.Conn, command string, args ...string) error {

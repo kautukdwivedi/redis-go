@@ -10,16 +10,16 @@ const (
 	replication ServerInfoSection = "replication"
 )
 
-func (s *server) replicationInfo() []string {
+func (s *ServerV2) replicationInfo() []string {
 	info := []string{
-		fmt.Sprintf("role:%v", s.options.role.string()),
+		fmt.Sprintf("role:%v", s.role.string()),
 	}
 
 	if s.isMaster() {
-		info = append(info, fmt.Sprintf("master_replid:%v", s.options.masterReplId))
+		info = append(info, fmt.Sprintf("master_replid:%v", s.masterReplId))
 
-		if s.options.masterReplOffset >= 0 {
-			info = append(info, fmt.Sprintf("master_repl_offset:%v", s.options.masterReplOffset))
+		if s.masterReplOffset >= 0 {
+			info = append(info, fmt.Sprintf("master_repl_offset:%v", s.masterReplOffset))
 		}
 	}
 
