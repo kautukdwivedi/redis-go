@@ -176,7 +176,7 @@ func handleCommandSet(s *server, conn net.Conn, args []string) error {
 	s.data[key] = expVal
 	s.dataMu.Unlock()
 
-	if s.role == master {
+	if s.isMaster() {
 		_, err := conn.Write(okSimpleString())
 		if err != nil {
 			return err
