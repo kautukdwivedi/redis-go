@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+type Type byte
+
+const (
+	array      Type = '*'
+	bulkString Type = '$'
+)
+
 type command struct {
 	name     string
 	callback func(conn net.Conn, args []string) error
