@@ -2,43 +2,58 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 )
 
-var (
-	port             int
-	data             = make(map[string]expiringValue)
-	dataMu           sync.RWMutex
-	slaves           []net.Conn
-	slavesMu         sync.Mutex
-	masterHost       string
-	masterPort       int
-	masterReplId     string
-	masterReplOffset int
-	role             ServerRole
-)
+type server struct {
+	*serverConfig
+	data     map[string]expiringValue
+	dataMu   *sync.RWMutex
+	slaves   []net.Conn
+	slavesMu *sync.Mutex
+}
 
-func startServer() {
-	if role == slave {
-		masterConn, err := doHandshakeWithMaster()
+func newServer(config *serverConfig) server {
+	return server{
+		serverConfig: config,
+		data:         make(map[string]expiringValue),
+		dataMu:       &sync.RWMutex{},
+		slaves:       []net.Conn{},
+		slavesMu:     &sync.Mutex{},
+	}
+}
+
+func (s *server) isMaster() bool {
+	return s.role == master
+}
+
+func (s *server) isSlave() bool {
+	return s.role == slave
+}
+
+func (s *server) start() {
+	if s.isSlave() {
+		masterConn, err := s.doHandshakeWithMaster()
 		if err != nil {
 			fmt.Println("Error connecting to master: ", err)
 			return
 		}
 
-		go handleConn(masterConn)
+		go s.handleConn(masterConn)
 	}
 
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	log.Fatal(s.listenAndServe())
+}
+
+func (s *server) listenAndServe() error {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer ln.Close()
 
@@ -49,11 +64,11 @@ func startServer() {
 			continue
 		}
 
-		go handleConn(conn)
+		go s.handleConn(conn)
 	}
 }
 
-func handleConn(conn net.Conn) {
+func (s *server) handleConn(conn net.Conn) {
 	defer conn.Close()
 
 	buf := make([]byte, 1024)
@@ -66,55 +81,11 @@ func handleConn(conn net.Conn) {
 
 		msgBuf := make([]byte, n)
 		copy(msgBuf, buf[:n])
-		handleRawMessage(conn, msgBuf)
+		s.handleRawMessage(conn, msgBuf)
 	}
 }
 
-func serverConfig() error {
-	p := flag.Int("port", 6379, "Server port number")
-	replicaOf := flag.String("replicaof", "", "<MASTER_HOST> <MASTER_PORT>")
-	flag.Parse()
-
-	port = *p
-
-	err := parseReplicaOf(*replicaOf)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func parseReplicaOf(replicaOf string) error {
-	if len(replicaOf) > 0 {
-		addrAndPort := strings.Split(replicaOf, " ")
-
-		if len(addrAndPort) != 2 {
-			return errors.New("invalid replica address format")
-		}
-
-		port, err := strconv.Atoi(addrAndPort[1])
-		if err != nil {
-			return errors.New("invalid replica port")
-		}
-
-		masterHost = addrAndPort[0]
-		masterPort = port
-		masterReplId = "?"
-		masterReplOffset = -1
-
-		role = slave
-	} else {
-		masterReplId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
-		masterReplOffset = 0
-
-		role = master
-	}
-
-	return nil
-}
-
-func handleRawMessage(conn net.Conn, msgBuf []byte) error {
+func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
 	bufStr := string(msgBuf)
 	if len(bufStr) == 0 {
 		return errors.New("empty raw message")
@@ -126,7 +97,7 @@ func handleRawMessage(conn net.Conn, msgBuf []byte) error {
 	}
 
 	for _, command := range commands[1:] {
-		err := handleCommand(conn, command)
+		err := s.handleCommand(conn, command)
 		if err != nil {
 			fmt.Println("cmd error: ", err)
 		}
@@ -135,7 +106,7 @@ func handleRawMessage(conn net.Conn, msgBuf []byte) error {
 	return nil
 }
 
-func handleCommand(conn net.Conn, cmd string) error {
+func (s *server) handleCommand(conn net.Conn, cmd string) error {
 	cmdPieces := strings.Split(cmd, carriageReturn())
 
 	if len(cmdPieces) <= 1 {
@@ -143,18 +114,18 @@ func handleCommand(conn net.Conn, cmd string) error {
 	}
 
 	name, args := parseCommand(cmdPieces[1:])
-	comm, err := findCommand(name)
+	comm, err := s.findCommand(name)
 
 	if err != nil {
 		return err
 	}
 
-	comm.callback(conn, args)
+	comm.callback(s, conn, args)
 
 	return nil
 }
 
-func propagateCommandToSlaves(comm string, args []string) error {
+func (s *server) propagateCommandToSlaves(comm string, args []string) error {
 	argsStr := make([]string, 0, len(args)+1)
 	argsStr = append(argsStr, comm)
 	argsStr = append(argsStr, args...)
@@ -164,11 +135,11 @@ func propagateCommandToSlaves(comm string, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Propagating commands to %d slaves\n", len(slaves))
+	fmt.Printf("Propagating commands to %d slaves\n", len(s.slaves))
 
-	slavesMu.Lock()
-	defer slavesMu.Unlock()
-	for _, slave := range slaves {
+	s.slavesMu.Lock()
+	defer s.slavesMu.Unlock()
+	for _, slave := range s.slaves {
 		_, err := slave.Write(resp)
 		if err != nil {
 			fmt.Println(err.Error())

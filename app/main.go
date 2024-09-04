@@ -1,16 +1,16 @@
 package main
 
-import (
-	"log"
-)
+import "log"
 
 func main() {
-	err := serverConfig()
+	config, err := newServerConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	go startServer()
+	server := newServer(config)
+
+	go server.start()
 
 	for {
 		sleepSeconds(1)

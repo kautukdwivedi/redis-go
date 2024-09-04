@@ -19,7 +19,7 @@ const (
 
 type command struct {
 	name     string
-	callback func(conn net.Conn, args []string) error
+	callback func(s *server, conn net.Conn, args []string) error
 }
 
 func parseCommand(cmdPieces []string) (string, []string) {
@@ -39,7 +39,7 @@ func parseCommand(cmdPieces []string) (string, []string) {
 	return string(cleanCmdPieces[0]), args
 }
 
-func findCommand(name string) (*command, error) {
+func (s *server) findCommand(name string) (*command, error) {
 	comm, ok := getCommands()[strings.ToLower(name)]
 	if !ok {
 		return nil, fmt.Errorf("unknown command: \"%s\"", name)
@@ -84,7 +84,7 @@ func getCommands() map[string]*command {
 	}
 }
 
-func handleCommandPing(conn net.Conn, args []string) error {
+func handleCommandPing(s *server, conn net.Conn, args []string) error {
 	_, err := conn.Write(respAsSimpleString("PONG"))
 	if err != nil {
 		return err
@@ -93,7 +93,7 @@ func handleCommandPing(conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandEcho(conn net.Conn, args []string) error {
+func handleCommandEcho(s *server, conn net.Conn, args []string) error {
 	if len(args) != 1 {
 		return errors.New("command echo must take one argument")
 	}
@@ -106,16 +106,16 @@ func handleCommandEcho(conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandGet(conn net.Conn, args []string) error {
+func handleCommandGet(s *server, conn net.Conn, args []string) error {
 	if len(args) != 1 {
 		return errors.New("command get must take one argument")
 	}
 
 	nullBulkString := respAsBulkString("")
 
-	dataMu.RLock()
-	expVal, ok := data[args[0]]
-	dataMu.RUnlock()
+	s.dataMu.RLock()
+	expVal, ok := s.data[args[0]]
+	s.dataMu.RUnlock()
 	if !ok {
 		_, err := conn.Write(nullBulkString)
 		if err != nil {
@@ -142,7 +142,7 @@ func handleCommandGet(conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandSet(conn net.Conn, args []string) error {
+func handleCommandSet(s *server, conn net.Conn, args []string) error {
 	if len(args) < 2 {
 		return errors.New("command set accepts two arguments")
 	}
@@ -172,18 +172,18 @@ func handleCommandSet(conn net.Conn, args []string) error {
 		expVal.expiresIn = exp
 	}
 
-	dataMu.Lock()
-	data[key] = expVal
-	dataMu.Unlock()
+	s.dataMu.Lock()
+	s.data[key] = expVal
+	s.dataMu.Unlock()
 
-	if role == master {
+	if s.role == master {
 		_, err := conn.Write(okSimpleString())
 		if err != nil {
 			return err
 		}
 
 		go func() {
-			err := propagateCommandToSlaves("SET", args)
+			err := s.propagateCommandToSlaves("SET", args)
 			if err != nil {
 				fmt.Println("Failed propagating to slaves: ", err)
 			}
@@ -193,14 +193,14 @@ func handleCommandSet(conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandInfo(conn net.Conn, args []string) error {
+func handleCommandInfo(s *server, conn net.Conn, args []string) error {
 	if len(args) != 1 {
 		return errors.New("not yet supported")
 	}
 
 	switch ServerInfoSection(args[0]) {
 	case replication:
-		respStr := strings.Join(replicationInfo(), "\n")
+		respStr := strings.Join(s.replicationInfo(), "\n")
 
 		_, err := conn.Write(respAsBulkString(respStr))
 		if err != nil {
@@ -211,7 +211,7 @@ func handleCommandInfo(conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandReplconf(conn net.Conn, args []string) error {
+func handleCommandReplconf(s *server, conn net.Conn, args []string) error {
 	_, err := conn.Write(okSimpleString())
 	if err != nil {
 		return err
@@ -220,8 +220,8 @@ func handleCommandReplconf(conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandPsync(conn net.Conn, args []string) error {
-	resp := fmt.Sprintf("FULLRESYNC %s %d", masterReplId, masterReplOffset)
+func handleCommandPsync(s *server, conn net.Conn, args []string) error {
+	resp := fmt.Sprintf("FULLRESYNC %s %d", s.masterReplId, s.masterReplOffset)
 
 	_, err := conn.Write(respAsSimpleString(resp))
 	if err != nil {
@@ -240,12 +240,12 @@ func handleCommandPsync(conn net.Conn, args []string) error {
 	}
 
 	fmt.Println("Adding slave...")
-	slavesMu.Lock()
-	slaves = append(slaves, conn)
-	slavesMu.Unlock()
+	s.slavesMu.Lock()
+	s.slaves = append(s.slaves, conn)
+	s.slavesMu.Unlock()
 
-	dataMu.RLock()
-	for k, v := range data {
+	s.dataMu.RLock()
+	for k, v := range s.data {
 		resp := make([]string, 0, 5)
 		resp = append(resp, "SET")
 		resp = append(resp, k)
@@ -264,7 +264,7 @@ func handleCommandPsync(conn net.Conn, args []string) error {
 			return err
 		}
 	}
-	dataMu.RUnlock()
+	s.dataMu.RUnlock()
 
 	return nil
 }
