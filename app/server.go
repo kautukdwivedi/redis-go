@@ -114,13 +114,25 @@ func (s *server) handleCommand(conn net.Conn, cmd string) error {
 	}
 
 	name, args := parseCommand(cmdPieces[1:])
-	comm, err := s.findCommand(name)
 
-	if err != nil {
-		return err
+	switch strings.ToLower(name) {
+	case "ping":
+		s.handleCommandPing(conn)
+	case "echo":
+		s.handleCommandEcho(conn, args)
+	case "get":
+		s.handleCommandGet(conn, args)
+	case "set":
+		s.handleCommandSet(conn, args)
+	case "info":
+		s.handleCommandInfo(conn, args)
+	case "replconf":
+		s.handleCommandReplconf(conn)
+	case "psync":
+		s.handleCommandPsync(conn)
+	default:
+		return fmt.Errorf("unknown command: \"%s\"", name)
 	}
-
-	comm.callback(s, conn, args)
 
 	return nil
 }

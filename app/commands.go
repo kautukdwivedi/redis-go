@@ -17,11 +17,6 @@ const (
 	bulkString Type = '$'
 )
 
-type command struct {
-	name     string
-	callback func(s *server, conn net.Conn, args []string) error
-}
-
 func parseCommand(cmdPieces []string) (string, []string) {
 	cleanCmdPieces := make([]string, 0, len(cmdPieces)/2-1)
 	for idx, piece := range cmdPieces {
@@ -39,52 +34,7 @@ func parseCommand(cmdPieces []string) (string, []string) {
 	return string(cleanCmdPieces[0]), args
 }
 
-func (s *server) findCommand(name string) (*command, error) {
-	comm, ok := getCommands()[strings.ToLower(name)]
-	if !ok {
-		return nil, fmt.Errorf("unknown command: \"%s\"", name)
-	}
-
-	return comm, nil
-}
-
-func getCommands() map[string]*command {
-	return map[string]*command{
-		"ping": {
-			name:     "ping",
-			callback: handleCommandPing,
-		},
-
-		"echo": {
-			name:     "echo",
-			callback: handleCommandEcho,
-		},
-
-		"get": {
-			name:     "get",
-			callback: handleCommandGet,
-		},
-
-		"set": {
-			name:     "set",
-			callback: handleCommandSet,
-		},
-		"info": {
-			name:     "info",
-			callback: handleCommandInfo,
-		},
-		"replconf": {
-			name:     "replconf",
-			callback: handleCommandReplconf,
-		},
-		"psync": {
-			name:     "psync",
-			callback: handleCommandPsync,
-		},
-	}
-}
-
-func handleCommandPing(s *server, conn net.Conn, args []string) error {
+func (s *server) handleCommandPing(conn net.Conn) error {
 	_, err := conn.Write(respAsSimpleString("PONG"))
 	if err != nil {
 		return err
@@ -93,7 +43,7 @@ func handleCommandPing(s *server, conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandEcho(s *server, conn net.Conn, args []string) error {
+func (s *server) handleCommandEcho(conn net.Conn, args []string) error {
 	if len(args) != 1 {
 		return errors.New("command echo must take one argument")
 	}
@@ -106,7 +56,7 @@ func handleCommandEcho(s *server, conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandGet(s *server, conn net.Conn, args []string) error {
+func (s *server) handleCommandGet(conn net.Conn, args []string) error {
 	if len(args) != 1 {
 		return errors.New("command get must take one argument")
 	}
@@ -142,7 +92,7 @@ func handleCommandGet(s *server, conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandSet(s *server, conn net.Conn, args []string) error {
+func (s *server) handleCommandSet(conn net.Conn, args []string) error {
 	if len(args) < 2 {
 		return errors.New("command set accepts two arguments")
 	}
@@ -193,7 +143,7 @@ func handleCommandSet(s *server, conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandInfo(s *server, conn net.Conn, args []string) error {
+func (s *server) handleCommandInfo(conn net.Conn, args []string) error {
 	if len(args) != 1 {
 		return errors.New("not yet supported")
 	}
@@ -211,7 +161,7 @@ func handleCommandInfo(s *server, conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandReplconf(s *server, conn net.Conn, args []string) error {
+func (s *server) handleCommandReplconf(conn net.Conn) error {
 	_, err := conn.Write(okSimpleString())
 	if err != nil {
 		return err
@@ -220,7 +170,7 @@ func handleCommandReplconf(s *server, conn net.Conn, args []string) error {
 	return nil
 }
 
-func handleCommandPsync(s *server, conn net.Conn, args []string) error {
+func (s *server) handleCommandPsync(conn net.Conn) error {
 	resp := fmt.Sprintf("FULLRESYNC %s %d", s.masterReplId, s.masterReplOffset)
 
 	_, err := conn.Write(respAsSimpleString(resp))
