@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strconv"
@@ -64,4 +65,10 @@ func carriageReturn() string {
 
 func sleepSeconds(seconds time.Duration) {
 	time.Sleep(seconds * time.Second)
+}
+
+func intToByteSlice(input int) []byte {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint64(buf, uint64(input))
+	return buf
 }

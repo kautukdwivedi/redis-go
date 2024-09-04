@@ -15,12 +15,12 @@ type Message struct {
 
 type ClientV2 struct {
 	conn  net.Conn
-	msgCh chan Message
+	msgCh chan *Message
 	data  map[string]expiringValue
 	mu    *sync.RWMutex
 }
 
-func NewPeer(conn net.Conn, msgCh chan Message) *ClientV2 {
+func NewPeer(conn net.Conn, msgCh chan *Message) *ClientV2 {
 	return &ClientV2{
 		conn:  conn,
 		msgCh: msgCh,
@@ -41,7 +41,7 @@ func (c *ClientV2) readLoop() error {
 
 		msgBuf := make([]byte, n)
 		copy(msgBuf, buf[:n])
-		c.msgCh <- Message{
+		c.msgCh <- &Message{
 			msgBuf: msgBuf,
 			client: c,
 		}

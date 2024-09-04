@@ -2,15 +2,17 @@ package main
 
 import (
 	"log"
-	"log/slog"
 )
 
 func main() {
-	config, err := serverConfig()
+	err := serverConfig()
 	if err != nil {
-		slog.Error("server config error", "err", err)
+		log.Fatal(err)
 	}
 
-	server := NewServer(config)
-	log.Fatal(server.Start())
+	go startServer()
+
+	for {
+		sleepSeconds(1)
+	}
 }

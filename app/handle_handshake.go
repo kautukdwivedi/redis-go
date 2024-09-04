@@ -6,8 +6,8 @@ import (
 	"strconv"
 )
 
-func (s *ServerV2) doHandshakeWithMaster() (net.Conn, error) {
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", s.masterHost, s.masterPort))
+func doHandshakeWithMaster() (net.Conn, error) {
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", masterHost, masterPort))
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +24,7 @@ func (s *ServerV2) doHandshakeWithMaster() (net.Conn, error) {
 
 	sleepSeconds(1)
 
-	err = writeCommandWithArgs(conn, "REPLCONF", "listening-port", strconv.Itoa(s.port))
+	err = writeCommandWithArgs(conn, "REPLCONF", "listening-port", strconv.Itoa(port))
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (s *ServerV2) doHandshakeWithMaster() (net.Conn, error) {
 
 	sleepSeconds(1)
 
-	err = writeCommandWithArgs(conn, "PSYNC", s.masterReplId, strconv.Itoa(s.masterReplOffset))
+	err = writeCommandWithArgs(conn, "PSYNC", masterReplId, strconv.Itoa(masterReplOffset))
 	if err != nil {
 		return nil, err
 	}
