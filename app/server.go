@@ -6,8 +6,10 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 type server struct {
@@ -86,21 +88,44 @@ func (s *server) handleConn(conn net.Conn) {
 }
 
 func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
-	bufStr := string(msgBuf)
-	if len(bufStr) == 0 {
-		return errors.New("empty raw message")
+	startIdx := -1
+	count := 0
+	commands := [][]byte{}
+outer:
+	for idx, b := range msgBuf {
+		bRune := rune(b)
+		switch {
+		case bRune == '*':
+			startIdx = idx
+		case unicode.IsDigit(bRune) && startIdx > -1:
+			if count < 10 {
+				commands = append(commands, make([]byte, 0))
+			}
+			val, err := strconv.Atoi(string(bRune))
+			if err != nil {
+				break outer
+			}
+			count = count*10 + val
+		default:
+			if len(commands) == 0 {
+				commands = append(commands, make([]byte, 0))
+			}
+			lastIdx := len(commands) - 1
+			if startIdx >= 0 && count == 0 {
+				commands[lastIdx] = append(commands[lastIdx], '*')
+			}
+			commands[lastIdx] = append(commands[lastIdx], b)
+			startIdx = -1
+			count = 0
+		}
 	}
 
-	commands := strings.Split(bufStr, "*")
-	if len(commands) == 0 {
-		return errors.New("no commands in input message")
-	}
-
-	for _, command := range commands[1:] {
-		err := s.handleCommand(conn, command)
+	for _, command := range commands {
+		err := s.handleCommand(conn, string(command))
 		if err != nil {
 			fmt.Println("cmd error: ", err)
 		}
+
 	}
 
 	return nil
@@ -127,7 +152,7 @@ func (s *server) handleCommand(conn net.Conn, cmd string) error {
 	case "info":
 		s.handleCommandInfo(conn, args)
 	case "replconf":
-		s.handleCommandReplconf(conn)
+		s.handleCommandReplconf(conn, args)
 	case "psync":
 		s.handleCommandPsync(conn)
 	default:

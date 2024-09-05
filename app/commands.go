@@ -161,10 +161,22 @@ func (s *server) handleCommandInfo(conn net.Conn, args []string) error {
 	return nil
 }
 
-func (s *server) handleCommandReplconf(conn net.Conn) error {
-	_, err := conn.Write(okSimpleString())
-	if err != nil {
-		return err
+func (s *server) handleCommandReplconf(conn net.Conn, args []string) error {
+	if len(args) == 2 && strings.ToLower(args[0]) == "getack" && args[1] == "*" {
+		resp, err := respAsArray([]string{"REPLCONF", "ACK", "0"})
+		if err != nil {
+			return err
+		}
+
+		_, err = conn.Write(resp)
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := conn.Write(okSimpleString())
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
