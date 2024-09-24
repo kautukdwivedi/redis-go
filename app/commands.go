@@ -148,13 +148,10 @@ func (s *server) handleCommandInfo(conn net.Conn, args []string) error {
 
 func (s *server) handleCommandReplconf(conn net.Conn, args []string) error {
 	if len(args) == 2 && strings.ToLower(args[0]) == "getack" && args[1] == "*" {
-		fmt.Println("Processing replconf getack *")
 		resp, err := respAsArray([]string{"REPLCONF", "ACK", strconv.Itoa(s.masterReplOffset)})
 		if err != nil {
 			return err
 		}
-
-		fmt.Println("resp str: ", string(resp))
 
 		_, err = conn.Write(resp)
 		if err != nil {
