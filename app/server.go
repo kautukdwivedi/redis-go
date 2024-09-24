@@ -152,6 +152,8 @@ func (s *server) handleCommand(conn net.Conn, cmd *command) error {
 		s.handleCommandReplconf(conn, cmd.args)
 	case "psync":
 		s.handleCommandPsync(conn)
+	case "wait":
+		s.handleCommandWait(conn)
 	default:
 		return fmt.Errorf("unknown command: \"%s\"", cmd.name)
 	}

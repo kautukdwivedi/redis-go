@@ -15,6 +15,7 @@ type Type byte
 const (
 	array      Type = '*'
 	bulkString Type = '$'
+	integer    Type = ':'
 )
 
 func (s *server) handleCommandPing(conn net.Conn) error {
@@ -198,8 +199,12 @@ func (s *server) handleCommandPsync(conn net.Conn) error {
 		resp = append(resp, k)
 		resp = append(resp, v.val)
 		if px := v.expiresIn; px > 0 {
+			pxBytes, err := intToByteSlice(px)
+			if err != nil {
+				continue
+			}
 			resp = append(resp, "px")
-			resp = append(resp, string(intToByteSlice(px)))
+			resp = append(resp, string(pxBytes))
 		}
 		r, err := respAsArray(resp)
 		if err != nil {
@@ -212,6 +217,15 @@ func (s *server) handleCommandPsync(conn net.Conn) error {
 		}
 	}
 	s.dataMu.RUnlock()
+
+	return nil
+}
+
+func (s *server) handleCommandWait(conn net.Conn) error {
+	_, err := conn.Write(respAsInteger(0))
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

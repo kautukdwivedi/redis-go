@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -59,6 +61,14 @@ func respAsFileData(data []byte) []byte {
 	return resp
 }
 
+func respAsInteger(data int) []byte {
+	var sb strings.Builder
+	sb.WriteString(string(integer))
+	sb.WriteString(strconv.Itoa(data))
+	sb.WriteString(carriageReturn())
+	return []byte(sb.String())
+}
+
 func carriageReturn() string {
 	return "\r\n"
 }
@@ -67,8 +77,12 @@ func sleepSeconds(seconds time.Duration) {
 	time.Sleep(seconds * time.Second)
 }
 
-func intToByteSlice(input int) []byte {
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint64(buf, uint64(input))
-	return buf
+func intToByteSlice(input int) ([]byte, error) {
+	num := int64(input)
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, num)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
