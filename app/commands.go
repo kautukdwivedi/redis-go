@@ -222,7 +222,7 @@ func (s *server) handleCommandPsync(conn net.Conn) error {
 }
 
 func (s *server) handleCommandWait(conn net.Conn) error {
-	_, err := conn.Write(respAsInteger(0))
+	_, err := conn.Write(respAsInteger(len(s.slaves)))
 	if err != nil {
 		return err
 	}
