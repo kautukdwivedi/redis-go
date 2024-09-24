@@ -1,12 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -88,75 +86,74 @@ func (s *server) handleConn(conn net.Conn) {
 }
 
 func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
-	startIdx := -1
-	count := 0
-	commands := [][]byte{}
-outer:
-	for idx, b := range msgBuf {
+	cmds := &commands{
+		data: make([]*command, 0),
+	}
+	var cmd *command
+
+	for _, b := range msgBuf {
 		bRune := rune(b)
 		switch {
 		case bRune == '*':
-			startIdx = idx
-		case unicode.IsDigit(bRune) && startIdx > -1:
-			if count < 10 {
-				commands = append(commands, make([]byte, 0))
+			cmd = &command{
+				rawBytes: []byte{b},
 			}
-			val, err := strconv.Atoi(string(bRune))
-			if err != nil {
-				break outer
+			cmds.append(cmd)
+		case unicode.IsDigit(bRune):
+			if cmd == nil {
+				continue
 			}
-			count = count*10 + val
+			cmd.append(b)
 		default:
-			if len(commands) == 0 {
-				commands = append(commands, make([]byte, 0))
+			if cmd == nil {
+				continue
 			}
-			lastIdx := len(commands) - 1
-			if startIdx >= 0 && count == 0 {
-				commands[lastIdx] = append(commands[lastIdx], '*')
+			n := len(cmds.data) - 1
+			lastCmd := cmds.data[n]
+			if len(lastCmd.rawBytes) == 1 && lastCmd.rawBytes[0] == '*' {
+				cmds.data = cmds.data[:n]
+				n = len(cmds.data) - 1
+				cmd = cmds.data[n]
+				cmd.append('*')
 			}
-			commands[lastIdx] = append(commands[lastIdx], b)
-			startIdx = -1
-			count = 0
+			cmd.append(b)
 		}
 	}
 
-	for _, command := range commands {
-		err := s.handleCommand(conn, string(command))
+	for _, command := range cmds.data {
+		err := s.handleCommand(conn, command)
 		if err != nil {
 			fmt.Println("cmd error: ", err)
 		}
 
+		if s.isSlave() {
+			s.masterReplOffset += command.bytesLength()
+		}
 	}
 
 	return nil
 }
 
-func (s *server) handleCommand(conn net.Conn, cmd string) error {
-	cmdPieces := strings.Split(cmd, carriageReturn())
+func (s *server) handleCommand(conn net.Conn, cmd *command) error {
+	cmd.parse()
 
-	if len(cmdPieces) <= 1 {
-		return errors.New("command string is not a valid command")
-	}
-
-	name, args := parseCommand(cmdPieces[1:])
-
-	switch strings.ToLower(name) {
+	switch strings.ToLower(cmd.name) {
 	case "ping":
 		s.handleCommandPing(conn)
 	case "echo":
-		s.handleCommandEcho(conn, args)
+		s.handleCommandEcho(conn, cmd.args)
 	case "get":
-		s.handleCommandGet(conn, args)
+		s.handleCommandGet(conn, cmd.args)
 	case "set":
-		s.handleCommandSet(conn, args)
+		s.handleCommandSet(conn, cmd.args)
 	case "info":
-		s.handleCommandInfo(conn, args)
+		s.handleCommandInfo(conn, cmd.args)
 	case "replconf":
-		s.handleCommandReplconf(conn, args)
+		s.handleCommandReplconf(conn, cmd.args)
 	case "psync":
 		s.handleCommandPsync(conn)
 	default:
-		return fmt.Errorf("unknown command: \"%s\"", name)
+		return fmt.Errorf("unknown command: \"%s\"", cmd.name)
 	}
 
 	return nil
@@ -171,8 +168,6 @@ func (s *server) propagateCommandToSlaves(comm string, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	fmt.Printf("Propagating commands to %d slaves\n", len(s.slaves))
 
 	s.slavesMu.Lock()
 	defer s.slavesMu.Unlock()

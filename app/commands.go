@@ -17,27 +17,12 @@ const (
 	bulkString Type = '$'
 )
 
-func parseCommand(cmdPieces []string) (string, []string) {
-	cleanCmdPieces := make([]string, 0, len(cmdPieces)/2-1)
-	for idx, piece := range cmdPieces {
-		if idx%2 != 0 {
-			cleanCmdPieces = append(cleanCmdPieces, piece)
-		}
-	}
-
-	var args []string
-
-	if len(cleanCmdPieces) > 1 {
-		args = cleanCmdPieces[1:]
-	}
-
-	return string(cleanCmdPieces[0]), args
-}
-
 func (s *server) handleCommandPing(conn net.Conn) error {
-	_, err := conn.Write(respAsSimpleString("PONG"))
-	if err != nil {
-		return err
+	if s.isMaster() {
+		_, err := conn.Write(respAsSimpleString("PONG"))
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -163,10 +148,13 @@ func (s *server) handleCommandInfo(conn net.Conn, args []string) error {
 
 func (s *server) handleCommandReplconf(conn net.Conn, args []string) error {
 	if len(args) == 2 && strings.ToLower(args[0]) == "getack" && args[1] == "*" {
-		resp, err := respAsArray([]string{"REPLCONF", "ACK", "0"})
+		fmt.Println("Processing replconf getack *")
+		resp, err := respAsArray([]string{"REPLCONF", "ACK", strconv.Itoa(s.masterReplOffset)})
 		if err != nil {
 			return err
 		}
+
+		fmt.Println("resp str: ", string(resp))
 
 		_, err = conn.Write(resp)
 		if err != nil {

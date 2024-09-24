@@ -43,6 +43,8 @@ func (s *server) doHandshakeWithMaster() (net.Conn, error) {
 		return nil, err
 	}
 
+	s.masterReplOffset = 0
+
 	sleepSeconds(1)
 
 	return conn, nil
