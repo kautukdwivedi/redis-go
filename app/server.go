@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"strings"
 	"sync"
 	"unicode"
 )
@@ -126,85 +125,6 @@ func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
 		err := s.handleCommand(conn, command)
 		if err != nil {
 			fmt.Println("cmd error: ", err)
-		}
-	}
-
-	return nil
-}
-
-func (s *server) handleCommand(conn net.Conn, cmd *command) error {
-	cmd.parse()
-
-	if s.isMaster() {
-		return s.handleCommandOnMaster(conn, cmd)
-	} else {
-		return s.handleCommandOnSlave(conn, cmd)
-	}
-}
-
-func (s *server) handleCommandOnMaster(conn net.Conn, cmd *command) error {
-	switch strings.ToLower(cmd.name) {
-	case "ping":
-		return s.handleCommandPing(conn)
-	case "echo":
-		return s.handleCommandEcho(conn, cmd.args)
-	case "get":
-		return s.handleCommandGet(conn, cmd.args)
-	case "set":
-		return s.handleCommandSetOnMaster(conn, cmd.args)
-	case "info":
-		return s.handleCommandInfo(conn, cmd.args)
-	case "replconf":
-		return s.handleCommandReplconfOnMaster(conn, cmd.args)
-	case "psync":
-		return s.handleCommandPsync(conn)
-	case "wait":
-		return s.handleCommandWait(conn, cmd.args)
-	default:
-		return nil
-	}
-}
-
-func (s *server) handleCommandOnSlave(conn net.Conn, cmd *command) error {
-	var err error
-
-	switch strings.ToLower(cmd.name) {
-	case "echo":
-		err = s.handleCommandEcho(conn, cmd.args)
-	case "get":
-		err = s.handleCommandGet(conn, cmd.args)
-	case "set":
-		err = s.handleCommandSetOnSlave(cmd.args)
-	case "info":
-		err = s.handleCommandInfo(conn, cmd.args)
-	case "replconf":
-		err = s.handleCommandReplconfOnSlave(conn, cmd.args)
-	}
-
-	if err == nil {
-		s.masterReplOffset += cmd.bytesLength()
-	}
-
-	return err
-}
-
-func (s *server) propagateCommandToSlaves(comm string, args []string) error {
-	argsStr := make([]string, 0, len(args)+1)
-	argsStr = append(argsStr, comm)
-	argsStr = append(argsStr, args...)
-
-	resp, err := respAsArray(argsStr)
-	if err != nil {
-		return err
-	}
-
-	s.slavesMu.Lock()
-	defer s.slavesMu.Unlock()
-	for _, slave := range s.slaves {
-		_, err := slave.Write(resp)
-		if err != nil {
-			fmt.Println(err.Error())
-			continue
 		}
 	}
 

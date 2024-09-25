@@ -1,13 +1,9 @@
 package main
 
 import (
-	"encoding/base64"
-	"errors"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
-	"time"
 )
 
 type Type byte
@@ -18,275 +14,79 @@ const (
 	integer    Type = ':'
 )
 
-func (s *server) handleCommandPing(conn net.Conn) error {
+func (s *server) handleCommand(conn net.Conn, cmd *command) error {
+	cmd.parse()
+
 	if s.isMaster() {
-		_, err := conn.Write(respAsSimpleString("PONG"))
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *server) handleCommandEcho(conn net.Conn, args []string) error {
-	if len(args) != 1 {
-		return errors.New("command echo must take one argument")
-	}
-
-	_, err := conn.Write(respAsSimpleString(args[0]))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *server) handleCommandGet(conn net.Conn, args []string) error {
-	if len(args) != 1 {
-		return errors.New("command get must take one argument")
-	}
-
-	nullBulkString := respAsBulkString("")
-
-	s.dataMu.RLock()
-	expVal, ok := s.data[args[0]]
-	s.dataMu.RUnlock()
-	if !ok {
-		_, err := conn.Write(nullBulkString)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	if expVal.hasExpired() {
-		_, err := conn.Write(nullBulkString)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	_, err := conn.Write(respAsBulkString(string(expVal.val)))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *server) handleCommandSetOnMaster(conn net.Conn, args []string) error {
-	err := s.handleCommandSet(args)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Write(okSimpleString())
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		err := s.propagateCommandToSlaves("SET", args)
-		if err != nil {
-			fmt.Println("Failed propagating to slaves: ", err)
-		}
-	}()
-	return nil
-}
-
-func (s *server) handleCommandSetOnSlave(args []string) error {
-	return s.handleCommandSet(args)
-}
-
-func (s *server) handleCommandSet(args []string) error {
-	if len(args) < 2 {
-		return errors.New("command set accepts two arguments")
-	}
-
-	if len(args)%2 != 0 {
-		return errors.New("invalid arguments list, must come in pairs")
-	}
-
-	key := string(args[0])
-
-	expVal := expiringValue{
-		val:     args[1],
-		created: time.Now().UTC(),
-	}
-
-	if len(args) > 2 {
-		extraArg := args[2]
-		if !strings.EqualFold(extraArg, "px") {
-			return fmt.Errorf("unknown extra argument \"%s\"", extraArg)
-		}
-
-		exp, err := strconv.Atoi(args[3])
-		if err != nil {
-			return err
-		}
-
-		expVal.expiresIn = exp
-	}
-
-	s.dataMu.Lock()
-	s.data[key] = expVal
-	s.dataMu.Unlock()
-
-	return nil
-}
-
-func (s *server) handleCommandInfo(conn net.Conn, args []string) error {
-	if len(args) != 1 {
-		return errors.New("not yet supported")
-	}
-
-	switch ServerInfoSection(args[0]) {
-	case replication:
-		respStr := strings.Join(s.replicationInfo(), "\n")
-
-		_, err := conn.Write(respAsBulkString(respStr))
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *server) handleCommandReplconfOnMaster(conn net.Conn, args []string) error {
-	if strings.ToLower(args[0]) == "ack" {
-		s.ackChan <- true
+		return s.handleCommandOnMaster(conn, cmd)
 	} else {
-		_, err := conn.Write(okSimpleString())
-		if err != nil {
-			return err
-		}
+		return s.handleCommandOnSlave(conn, cmd)
 	}
-
-	return nil
 }
 
-func (s *server) handleCommandReplconfOnSlave(conn net.Conn, args []string) error {
-	if strings.ToLower(args[0]) == "getack" && args[1] == "*" {
-		resp, err := respAsArray([]string{"REPLCONF", "ACK", strconv.Itoa(s.masterReplOffset)})
-		if err != nil {
-			return err
-		}
-
-		_, err = conn.Write(resp)
-		if err != nil {
-			return err
-		}
+func (s *server) handleCommandOnMaster(conn net.Conn, cmd *command) error {
+	switch strings.ToLower(cmd.name) {
+	case "ping":
+		return s.handleCommandPing(conn)
+	case "echo":
+		return s.handleCommandEcho(conn, cmd.args)
+	case "get":
+		return s.handleCommandGet(conn, cmd.args)
+	case "set":
+		return s.handleCommandSetOnMaster(conn, cmd.args)
+	case "info":
+		return s.handleCommandInfo(conn, cmd.args)
+	case "replconf":
+		return s.handleCommandReplconfOnMaster(conn, cmd.args)
+	case "psync":
+		return s.handleCommandPsync(conn)
+	case "wait":
+		return s.handleCommandWait(conn, cmd.args)
+	default:
+		return nil
 	}
-
-	return nil
 }
 
-func (s *server) handleCommandPsync(conn net.Conn) error {
-	resp := fmt.Sprintf("FULLRESYNC %s %d", s.masterReplId, s.masterReplOffset)
+func (s *server) handleCommandOnSlave(conn net.Conn, cmd *command) error {
+	var err error
 
-	_, err := conn.Write(respAsSimpleString(resp))
+	switch strings.ToLower(cmd.name) {
+	case "echo":
+		err = s.handleCommandEcho(conn, cmd.args)
+	case "get":
+		err = s.handleCommandGet(conn, cmd.args)
+	case "set":
+		err = s.handleCommandSetOnSlave(cmd.args)
+	case "info":
+		err = s.handleCommandInfo(conn, cmd.args)
+	case "replconf":
+		err = s.handleCommandReplconfOnSlave(conn, cmd.args)
+	}
+
+	if err == nil {
+		s.masterReplOffset += cmd.bytesLength()
+	}
+
+	return err
+}
+
+func (s *server) propagateCommandToSlaves(comm string, args []string) error {
+	argsStr := make([]string, 0, len(args)+1)
+	argsStr = append(argsStr, comm)
+	argsStr = append(argsStr, args...)
+
+	resp, err := respAsArray(argsStr)
 	if err != nil {
 		return err
 	}
 
-	emptyFileBase64 := "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="
-	fileData, err := base64.StdEncoding.DecodeString(emptyFileBase64)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Write(respAsFileData(fileData))
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Adding slave...")
 	s.slavesMu.Lock()
-	s.slaves = append(s.slaves, conn)
-	s.slavesMu.Unlock()
-
-	s.dataMu.RLock()
-	for k, v := range s.data {
-		resp := make([]string, 0, 5)
-		resp = append(resp, "SET")
-		resp = append(resp, k)
-		resp = append(resp, v.val)
-		if px := v.expiresIn; px > 0 {
-			pxBytes, err := intToByteSlice(px)
-			if err != nil {
-				continue
-			}
-			resp = append(resp, "px")
-			resp = append(resp, string(pxBytes))
-		}
-		r, err := respAsArray(resp)
+	defer s.slavesMu.Unlock()
+	for _, slave := range s.slaves {
+		_, err := slave.Write(resp)
 		if err != nil {
+			fmt.Println(err.Error())
 			continue
-		}
-
-		_, err = conn.Write(r)
-		if err != nil {
-			return err
-		}
-	}
-	s.dataMu.RUnlock()
-
-	return nil
-}
-
-func (s *server) handleCommandWait(conn net.Conn, args []string) error {
-	if len(s.data) == 0 {
-		_, err := conn.Write(respAsInteger(len(s.slaves)))
-		if err != nil {
-			return err
-		}
-
-	} else {
-		for _, slave := range s.slaves {
-			go func() {
-				getAck, err := respAsArray([]string{"REPLCONF", "GETACK", "*"})
-				if err != nil {
-					fmt.Println(err.Error())
-				}
-
-				_, err = slave.Write(getAck)
-				if err != nil {
-					fmt.Println(err.Error())
-				}
-			}()
-		}
-
-		requestedSlaves, err := strconv.Atoi(args[0])
-		if err != nil {
-			return err
-		}
-
-		timeout, err := strconv.Atoi(args[1])
-		if err != nil {
-			return err
-		}
-
-		acks := 0
-		timer := time.After(time.Duration(timeout) * time.Millisecond)
-
-	outer:
-		for acks < requestedSlaves {
-			select {
-			case <-s.ackChan:
-				acks++
-			case <-timer:
-				break outer
-			}
-		}
-
-		_, err = conn.Write(respAsInteger(acks))
-		if err != nil {
-			return err
 		}
 	}
 
