@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -44,6 +43,4 @@ func (c *command) parse() {
 	}
 
 	c.name = strings.Join(namePieces, " ")
-	fmt.Println("Cmd name: ", c.name)
-	fmt.Println("Cmd args: ", c.args)
 }
