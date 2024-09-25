@@ -16,6 +16,7 @@ type server struct {
 	dataMu   *sync.RWMutex
 	slaves   []net.Conn
 	slavesMu *sync.Mutex
+	ackChan  chan bool
 }
 
 func newServer(config *serverConfig) server {
@@ -25,6 +26,7 @@ func newServer(config *serverConfig) server {
 		dataMu:       &sync.RWMutex{},
 		slaves:       []net.Conn{},
 		slavesMu:     &sync.Mutex{},
+		ackChan:      make(chan bool),
 	}
 }
 
@@ -125,10 +127,6 @@ func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
 		if err != nil {
 			fmt.Println("cmd error: ", err)
 		}
-
-		if s.isSlave() {
-			s.masterReplOffset += command.bytesLength()
-		}
 	}
 
 	return nil
@@ -137,28 +135,57 @@ func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
 func (s *server) handleCommand(conn net.Conn, cmd *command) error {
 	cmd.parse()
 
+	if s.isMaster() {
+		return s.handleCommandOnMaster(conn, cmd)
+	} else {
+		return s.handleCommandOnSlave(conn, cmd)
+	}
+}
+
+func (s *server) handleCommandOnMaster(conn net.Conn, cmd *command) error {
 	switch strings.ToLower(cmd.name) {
 	case "ping":
-		s.handleCommandPing(conn)
+		return s.handleCommandPing(conn)
 	case "echo":
-		s.handleCommandEcho(conn, cmd.args)
+		return s.handleCommandEcho(conn, cmd.args)
 	case "get":
-		s.handleCommandGet(conn, cmd.args)
+		return s.handleCommandGet(conn, cmd.args)
 	case "set":
-		s.handleCommandSet(conn, cmd.args)
+		return s.handleCommandSetOnMaster(conn, cmd.args)
 	case "info":
-		s.handleCommandInfo(conn, cmd.args)
+		return s.handleCommandInfo(conn, cmd.args)
 	case "replconf":
-		s.handleCommandReplconf(conn, cmd.args)
+		return s.handleCommandReplconfOnMaster(conn, cmd.args)
 	case "psync":
-		s.handleCommandPsync(conn)
+		return s.handleCommandPsync(conn)
 	case "wait":
-		s.handleCommandWait(conn)
+		return s.handleCommandWait(conn, cmd.args)
 	default:
-		return fmt.Errorf("unknown command: \"%s\"", cmd.name)
+		return nil
+	}
+}
+
+func (s *server) handleCommandOnSlave(conn net.Conn, cmd *command) error {
+	var err error
+
+	switch strings.ToLower(cmd.name) {
+	case "echo":
+		err = s.handleCommandEcho(conn, cmd.args)
+	case "get":
+		err = s.handleCommandGet(conn, cmd.args)
+	case "set":
+		err = s.handleCommandSetOnSlave(cmd.args)
+	case "info":
+		err = s.handleCommandInfo(conn, cmd.args)
+	case "replconf":
+		err = s.handleCommandReplconfOnSlave(conn, cmd.args)
 	}
 
-	return nil
+	if err == nil {
+		s.masterReplOffset += cmd.bytesLength()
+	}
+
+	return err
 }
 
 func (s *server) propagateCommandToSlaves(comm string, args []string) error {

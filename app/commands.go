@@ -78,7 +78,31 @@ func (s *server) handleCommandGet(conn net.Conn, args []string) error {
 	return nil
 }
 
-func (s *server) handleCommandSet(conn net.Conn, args []string) error {
+func (s *server) handleCommandSetOnMaster(conn net.Conn, args []string) error {
+	err := s.handleCommandSet(args)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(okSimpleString())
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		err := s.propagateCommandToSlaves("SET", args)
+		if err != nil {
+			fmt.Println("Failed propagating to slaves: ", err)
+		}
+	}()
+	return nil
+}
+
+func (s *server) handleCommandSetOnSlave(args []string) error {
+	return s.handleCommandSet(args)
+}
+
+func (s *server) handleCommandSet(args []string) error {
 	if len(args) < 2 {
 		return errors.New("command set accepts two arguments")
 	}
@@ -112,20 +136,6 @@ func (s *server) handleCommandSet(conn net.Conn, args []string) error {
 	s.data[key] = expVal
 	s.dataMu.Unlock()
 
-	if s.isMaster() {
-		_, err := conn.Write(okSimpleString())
-		if err != nil {
-			return err
-		}
-
-		go func() {
-			err := s.propagateCommandToSlaves("SET", args)
-			if err != nil {
-				fmt.Println("Failed propagating to slaves: ", err)
-			}
-		}()
-	}
-
 	return nil
 }
 
@@ -147,19 +157,27 @@ func (s *server) handleCommandInfo(conn net.Conn, args []string) error {
 	return nil
 }
 
-func (s *server) handleCommandReplconf(conn net.Conn, args []string) error {
-	if len(args) == 2 && strings.ToLower(args[0]) == "getack" && args[1] == "*" {
+func (s *server) handleCommandReplconfOnMaster(conn net.Conn, args []string) error {
+	if strings.ToLower(args[0]) == "ack" {
+		s.ackChan <- true
+	} else {
+		_, err := conn.Write(okSimpleString())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *server) handleCommandReplconfOnSlave(conn net.Conn, args []string) error {
+	if strings.ToLower(args[0]) == "getack" && args[1] == "*" {
 		resp, err := respAsArray([]string{"REPLCONF", "ACK", strconv.Itoa(s.masterReplOffset)})
 		if err != nil {
 			return err
 		}
 
 		_, err = conn.Write(resp)
-		if err != nil {
-			return err
-		}
-	} else {
-		_, err := conn.Write(okSimpleString())
 		if err != nil {
 			return err
 		}
@@ -221,10 +239,55 @@ func (s *server) handleCommandPsync(conn net.Conn) error {
 	return nil
 }
 
-func (s *server) handleCommandWait(conn net.Conn) error {
-	_, err := conn.Write(respAsInteger(len(s.slaves)))
-	if err != nil {
-		return err
+func (s *server) handleCommandWait(conn net.Conn, args []string) error {
+	if len(s.data) == 0 {
+		_, err := conn.Write(respAsInteger(len(s.slaves)))
+		if err != nil {
+			return err
+		}
+
+	} else {
+		for _, slave := range s.slaves {
+			go func() {
+				getAck, err := respAsArray([]string{"REPLCONF", "GETACK", "*"})
+				if err != nil {
+					fmt.Println(err.Error())
+				}
+
+				_, err = slave.Write(getAck)
+				if err != nil {
+					fmt.Println(err.Error())
+				}
+			}()
+		}
+
+		requestedSlaves, err := strconv.Atoi(args[0])
+		if err != nil {
+			return err
+		}
+
+		timeout, err := strconv.Atoi(args[1])
+		if err != nil {
+			return err
+		}
+
+		acks := 0
+		timer := time.After(time.Duration(timeout) * time.Millisecond)
+
+	outer:
+		for acks < requestedSlaves {
+			select {
+			case <-s.ackChan:
+				acks++
+			case <-timer:
+				break outer
+			}
+		}
+
+		_, err = conn.Write(respAsInteger(acks))
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
