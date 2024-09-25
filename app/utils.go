@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 func respAsBulkString(resp string) []byte {
@@ -85,4 +86,16 @@ func intToByteSlice(input int) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+func IsUpper(s string, onlyLetters bool) bool {
+	for _, r := range s {
+		if onlyLetters && !unicode.IsLetter(r) {
+			return false
+		}
+		if !unicode.IsUpper(r) && unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true
 }

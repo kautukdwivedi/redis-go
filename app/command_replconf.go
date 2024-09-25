@@ -3,33 +3,30 @@ package main
 import (
 	"net"
 	"strconv"
-	"strings"
 )
 
-func (s *server) handleCommandReplconfOnMaster(conn net.Conn, args []string) error {
-	if strings.ToLower(args[0]) == "ack" {
-		s.ackChan <- true
-	} else {
-		_, err := conn.Write(okSimpleString())
-		if err != nil {
-			return err
-		}
+func (s *server) handleCommandReplconf(conn net.Conn) error {
+	_, err := conn.Write(okSimpleString())
+	if err != nil {
+		return err
 	}
-
 	return nil
 }
 
-func (s *server) handleCommandReplconfOnSlave(conn net.Conn, args []string) error {
-	if strings.ToLower(args[0]) == "getack" && args[1] == "*" {
-		resp, err := respAsArray([]string{"REPLCONF", "ACK", strconv.Itoa(s.masterReplOffset)})
-		if err != nil {
-			return err
-		}
+func (s *server) handleCommandReplconfAck() error {
+	s.ackChan <- true
+	return nil
+}
 
-		_, err = conn.Write(resp)
-		if err != nil {
-			return err
-		}
+func (s *server) handleCommandReplconfGetAck(conn net.Conn) error {
+	resp, err := respAsArray([]string{"REPLCONF", "ACK", strconv.Itoa(s.masterReplOffset)})
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(resp)
+	if err != nil {
+		return err
 	}
 
 	return nil

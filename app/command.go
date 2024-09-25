@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type commands struct {
 	data []*command
@@ -25,15 +28,22 @@ func (c *command) bytesLength() int {
 }
 
 func (c *command) parse() {
-	pieces := strings.Split(string(c.rawBytes), carriageReturn())[2:]
-	c.name = pieces[0]
-	if len(pieces) > 1 {
-		rawArgs := pieces[1:]
-		c.args = make([]string, 0, len(rawArgs)/2)
-		for idx, piece := range rawArgs {
-			if idx%2 != 0 {
-				c.args = append(c.args, piece)
-			}
+	pieces := strings.Split(string(c.rawBytes), carriageReturn())[1:]
+
+	namePieces := make([]string, 0, 2)
+
+	for idx, piece := range pieces {
+		if idx%2 == 0 || len(piece) == 0 {
+			continue
+		}
+		if IsUpper(piece, true) {
+			namePieces = append(namePieces, piece)
+		} else {
+			c.args = append(c.args, piece)
 		}
 	}
+
+	c.name = strings.Join(namePieces, " ")
+	fmt.Println("Cmd name: ", c.name)
+	fmt.Println("Cmd args: ", c.args)
 }

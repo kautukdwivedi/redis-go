@@ -5,6 +5,8 @@ import (
 	"flag"
 	"strconv"
 	"strings"
+
+	"github.com/codecrafters-io/redis-starter-go/app/internal"
 )
 
 type serverConfig struct {
@@ -14,15 +16,19 @@ type serverConfig struct {
 	masterReplId     string
 	masterReplOffset int
 	role             ServerRole
+	rdbFile          *internal.RDBFile
 }
 
 func newServerConfig() (*serverConfig, error) {
 	port := flag.Int("port", 6379, "Server port number")
 	replicaOf := flag.String("replicaof", "", "<MASTER_HOST> <MASTER_PORT>")
+	rdbFileDir := flag.String("dir", "", "RDB file dir")
+	rdbFileName := flag.String("dbfilename", "", "RDB file name")
 	flag.Parse()
 
 	config := &serverConfig{
-		port: *port,
+		port:    *port,
+		rdbFile: internal.NewRDBFile(*rdbFileDir, *rdbFileName),
 	}
 
 	err := config.parseReplicaOf(*replicaOf)

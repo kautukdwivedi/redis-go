@@ -98,6 +98,7 @@ func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
 		case bRune == '*':
 			cmd = &command{
 				rawBytes: []byte{b},
+				args:     make([]string, 0),
 			}
 			cmds.append(cmd)
 		case unicode.IsDigit(bRune):

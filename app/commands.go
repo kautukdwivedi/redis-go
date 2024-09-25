@@ -37,11 +37,15 @@ func (s *server) handleCommandOnMaster(conn net.Conn, cmd *command) error {
 	case "info":
 		return s.handleCommandInfo(conn, cmd.args)
 	case "replconf":
-		return s.handleCommandReplconfOnMaster(conn, cmd.args)
+		return s.handleCommandReplconf(conn)
+	case "replconf ack":
+		return s.handleCommandReplconfAck()
 	case "psync":
 		return s.handleCommandPsync(conn)
 	case "wait":
 		return s.handleCommandWait(conn, cmd.args)
+	case "config get":
+		return s.handleCommandConfigGet(conn, cmd.args)
 	default:
 		return nil
 	}
@@ -59,8 +63,10 @@ func (s *server) handleCommandOnSlave(conn net.Conn, cmd *command) error {
 		err = s.handleCommandSetOnSlave(cmd.args)
 	case "info":
 		err = s.handleCommandInfo(conn, cmd.args)
-	case "replconf":
-		err = s.handleCommandReplconfOnSlave(conn, cmd.args)
+	case "replconf getack":
+		err = s.handleCommandReplconfGetAck(conn)
+	case "config get":
+		err = s.handleCommandConfigGet(conn, cmd.args)
 	}
 
 	if err == nil {
