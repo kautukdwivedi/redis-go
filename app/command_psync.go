@@ -36,8 +36,8 @@ func (s *server) handleCommandPsync(conn net.Conn) error {
 		resp := make([]string, 0, 5)
 		resp = append(resp, "SET")
 		resp = append(resp, k)
-		resp = append(resp, v.val)
-		if px := v.expiresIn; px > 0 {
+		resp = append(resp, v.Val)
+		if px := v.ExpiresIn; px > 0 {
 			pxBytes, err := intToByteSlice(px)
 			if err != nil {
 				continue

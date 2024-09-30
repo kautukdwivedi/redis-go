@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/codecrafters-io/redis-starter-go/app/internal"
+	"github.com/codecrafters-io/redis-starter-go/app/internal/storage/rdb"
 )
 
 type serverConfig struct {
@@ -16,7 +16,7 @@ type serverConfig struct {
 	masterReplId     string
 	masterReplOffset int
 	role             ServerRole
-	rdbFile          *internal.RDBFile
+	rdbFile          *rdb.RDBFile
 }
 
 func newServerConfig() (*serverConfig, error) {
@@ -28,7 +28,7 @@ func newServerConfig() (*serverConfig, error) {
 
 	config := &serverConfig{
 		port:    *port,
-		rdbFile: internal.NewRDBFile(*rdbFileDir, *rdbFileName),
+		rdbFile: rdb.NewRDBFile(*rdbFileDir, *rdbFileName),
 	}
 
 	err := config.parseReplicaOf(*replicaOf)

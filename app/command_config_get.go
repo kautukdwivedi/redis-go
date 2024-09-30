@@ -13,7 +13,7 @@ func (s *server) handleCommandConfigGet(conn net.Conn, args []string) error {
 	case "dir":
 		val = s.rdbFile.Dir
 	case "dbfilename":
-		val = s.rdbFile.DBfilename
+		val = s.rdbFile.DBFilename
 	}
 
 	if len(val) > 0 {

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
 )
 
 func (s *server) handleCommandSetOnMaster(conn net.Conn, args []string) error {
@@ -44,9 +46,9 @@ func (s *server) handleCommandSet(args []string) error {
 
 	key := string(args[0])
 
-	expVal := expiringValue{
-		val:     args[1],
-		created: time.Now().UTC(),
+	expVal := storage.ExpiringValue{
+		Val:     args[1],
+		Created: time.Now().UTC(),
 	}
 
 	if len(args) > 2 {
@@ -60,7 +62,7 @@ func (s *server) handleCommandSet(args []string) error {
 			return err
 		}
 
-		expVal.expiresIn = exp
+		expVal.ExpiresIn = exp
 	}
 
 	s.dataMu.Lock()

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 )
 
@@ -11,6 +12,11 @@ func main() {
 	}
 
 	server := newServer(config)
+
+	_, err = server.loadRDB()
+	if err != nil {
+		fmt.Println("error loading rdb file: ", err.Error())
+	}
 
 	go server.start()
 

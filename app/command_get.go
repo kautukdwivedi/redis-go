@@ -24,7 +24,7 @@ func (s *server) handleCommandGet(conn net.Conn, args []string) error {
 		return nil
 	}
 
-	if expVal.hasExpired() {
+	if expVal.HasExpired() {
 		_, err := conn.Write(nullBulkString)
 		if err != nil {
 			return err
@@ -33,7 +33,7 @@ func (s *server) handleCommandGet(conn net.Conn, args []string) error {
 		return nil
 	}
 
-	_, err := conn.Write(respAsBulkString(string(expVal.val)))
+	_, err := conn.Write(respAsBulkString(string(expVal.Val)))
 	if err != nil {
 		return err
 	}

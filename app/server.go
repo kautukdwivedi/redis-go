@@ -7,11 +7,13 @@ import (
 	"net"
 	"sync"
 	"unicode"
+
+	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
 )
 
 type server struct {
 	*serverConfig
-	data     map[string]expiringValue
+	data     map[string]storage.ExpiringValue
 	dataMu   *sync.RWMutex
 	slaves   []net.Conn
 	slavesMu *sync.Mutex
@@ -21,7 +23,7 @@ type server struct {
 func newServer(config *serverConfig) server {
 	return server{
 		serverConfig: config,
-		data:         make(map[string]expiringValue),
+		data:         make(map[string]storage.ExpiringValue),
 		dataMu:       &sync.RWMutex{},
 		slaves:       []net.Conn{},
 		slavesMu:     &sync.Mutex{},
@@ -130,4 +132,30 @@ func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
 	}
 
 	return nil
+}
+
+func (s *server) loadRDB() (bool, error) {
+	err := s.rdbFile.Parse()
+	if err != nil {
+		return false, err
+	}
+
+	for _, db := range s.rdbFile.Dbs {
+		for key, val := range db.Data {
+			s.data[key] = val
+		}
+	}
+
+	return true, nil
+}
+
+func (s *server) getKeys() []string {
+	s.dataMu.RLock()
+	defer s.dataMu.RUnlock()
+
+	keys := make([]string, 0, len(s.data))
+	for key := range s.data {
+		keys = append(keys, key)
+	}
+	return keys
 }
