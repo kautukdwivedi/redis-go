@@ -11,5 +11,11 @@ type ExpiringValue struct {
 }
 
 func (v *ExpiringValue) HasExpired() bool {
-	return v.ExpiresIn > 0 && time.Now().UTC().Sub(v.Created).Milliseconds() >= int64(v.ExpiresIn)
+	if v.ExpiresIn < 0 {
+		return true
+	}
+	if v.ExpiresIn == 0 {
+		return false
+	}
+	return time.Now().UTC().Sub(v.Created).Milliseconds() >= int64(v.ExpiresIn)
 }

@@ -15,7 +15,7 @@ func main() {
 
 	_, err = server.loadRDB()
 	if err != nil {
-		fmt.Println("error loading rdb file: ", err.Error())
+		fmt.Println("error loading rdb file: ", err)
 	}
 
 	go server.start()

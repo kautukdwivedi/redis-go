@@ -16,7 +16,7 @@ type serverConfig struct {
 	masterReplId     string
 	masterReplOffset int
 	role             ServerRole
-	rdbFile          *rdb.RDBFile
+	rdbFile          *rdb.RDBFile3
 }
 
 func newServerConfig() (*serverConfig, error) {
@@ -28,7 +28,7 @@ func newServerConfig() (*serverConfig, error) {
 
 	config := &serverConfig{
 		port:    *port,
-		rdbFile: rdb.NewRDBFile(*rdbFileDir, *rdbFileName),
+		rdbFile: rdb.NewRDBFile3(*rdbFileDir, *rdbFileName),
 	}
 
 	err := config.parseReplicaOf(*replicaOf)

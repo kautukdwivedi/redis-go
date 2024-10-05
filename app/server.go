@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 	"unicode"
 
 	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
@@ -135,16 +136,27 @@ func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
 }
 
 func (s *server) loadRDB() (bool, error) {
-	err := s.rdbFile.Parse()
+	err := s.rdbFile.Load()
 	if err != nil {
 		return false, err
 	}
 
-	for _, db := range s.rdbFile.Dbs {
-		for key, val := range db.Data {
-			s.data[key] = val
+	fmt.Println("RDB data: ", s.rdbFile.Data)
+
+	s.dataMu.Lock()
+	now := time.Now().UTC()
+	for key, rdbObj := range s.rdbFile.Data {
+		var expiresIn int
+		if rdbObj.Exp != nil {
+			expiresIn = int(rdbObj.Exp.Sub(now).Milliseconds())
+		}
+		s.data[key] = storage.ExpiringValue{
+			Val:       rdbObj.Val,
+			Created:   now,
+			ExpiresIn: expiresIn,
 		}
 	}
+	s.dataMu.Unlock()
 
 	return true, nil
 }
