@@ -10,6 +10,13 @@ type ExpiringValue struct {
 	ExpiresIn int
 }
 
+func NewExpiringValue(val string) *ExpiringValue {
+	return &ExpiringValue{
+		Val:     val,
+		Created: time.Now().UTC(),
+	}
+}
+
 func (v *ExpiringValue) HasExpired() bool {
 	if v.ExpiresIn < 0 {
 		return true
