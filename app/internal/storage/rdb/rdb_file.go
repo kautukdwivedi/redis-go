@@ -2,201 +2,284 @@ package rdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
-	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
-
-	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
+	"time"
 )
 
 const (
-	rdbHeader          = "REDIS"
-	metadataHeader     = 0xFA
-	dbHeader           = 0xFE
-	keyExpiryHeaderMs  = 0xFC
-	keyExpiryHeaderSec = 0xFD
-	eofHeader          = 0xFF
+	eof              = 0xFF
+	selectDB         = 0xFE
+	expireTimeSec    = 0xFD
+	expireTimeMillis = 0xFC
+	resizeDB         = 0xFB
+	aux              = 0xFA
 )
+
+type value struct {
+	Val string
+	Exp *time.Time
+}
+
+type info struct {
+	MagicNumber [5]byte
+	Version     [4]byte
+}
 
 type RDBFile struct {
 	Dir        string
 	DBFilename string
-	Version    string
-	Dbs        []*RDBDatabase
+	DBs        []*RDBDatabase
+	info       info
+	auxiliary  map[string]string
 }
 
 type RDBDatabase struct {
-	Number              int
-	HashTableSize       int
-	ExpiryHashTableSize int
-	Data                map[string]storage.ExpiringValue
-	dataMu              *sync.Mutex
+	Data map[string]value
+	mu   *sync.Mutex
 }
 
-func NewRDBFile(dir, dbFilename string) *RDBFile {
+func NewRDBFile(dir, filename string) *RDBFile {
 	return &RDBFile{
 		Dir:        dir,
-		DBFilename: dbFilename,
-		Dbs:        make([]*RDBDatabase, 0),
+		DBFilename: filename,
+		DBs:        make([]*RDBDatabase, 0),
+		auxiliary:  make(map[string]string),
 	}
+
 }
 
-func (rdbf *RDBFile) Parse() error {
-	data, err := rdbf.Read()
+func (s *RDBFile) Load() error {
+	file, err := os.ReadFile(filepath.Join(s.Dir, s.DBFilename))
 	if err != nil {
 		return err
 	}
 
-	isValid, err := isRDBDataValid(data)
-	if err != nil {
-		return err
-	}
-	if !isValid {
-		return errors.New("invalid rdb file")
-	}
+	in := bytes.NewReader(file)
+	err = binary.Read(in, binary.BigEndian, &s.info)
 
-	rdbf.Version = string(data[5:9])
-
-	err = rdbf.parseDbsSection(data)
 	if err != nil {
 		return err
 	}
 
-	return nil
-}
+	var databaseHashTableSize int32
 
-func (rdbf *RDBFile) Read() ([]byte, error) {
-	data, err := os.ReadFile(fmt.Sprint(rdbf.Dir, "/", rdbf.DBFilename))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read RDB file: %s", err.Error())
-	}
-	return data, nil
-}
-
-func (rdbf *RDBFile) parseDbsSection(data []byte) error {
-	if dataIsMissingHeader(data, dbHeader) {
-		return nil
-	}
-
-	startIdx := bytes.Index(data, []byte{dbHeader}) + 1
-
+outer:
 	for {
-		dbNumber, bytesConsumed, err := parseSizeEncoding(data[startIdx:])
-		if err != nil {
-			return fmt.Errorf("parsing error: %s", err.Error())
+		fb, errPa := parseByte(in)
+		if errPa != nil {
+			return errPa
+
 		}
 
-		startIdx += bytesConsumed + 1
-
-		hashTableSize, bytesConsumed, err := parseSizeEncoding(data[startIdx:])
-		if err != nil {
-			return fmt.Errorf("parsing error: %s", err.Error())
-		}
-
-		startIdx += bytesConsumed
-
-		expiryHashTableSize, bytesConsumed, err := parseSizeEncoding(data[startIdx:])
-		if err != nil {
-			return fmt.Errorf("parsing error: %s", err.Error())
-		}
-
-		startIdx += bytesConsumed
-
-		db := &RDBDatabase{
-			Number:              dbNumber,
-			HashTableSize:       hashTableSize,
-			ExpiryHashTableSize: expiryHashTableSize,
-			Data:                make(map[string]storage.ExpiringValue),
-			dataMu:              &sync.Mutex{},
-		}
-
-		var count int
-		var key string
-
-		for {
-			str, bytesConsumed, err := stringEncoding(data[startIdx:])
+		switch fb {
+		case aux:
+			key, err := parseString(in)
 			if err != nil {
-				return fmt.Errorf("parsing error: %s", err.Error())
+				return err
 			}
 
-			startIdx += bytesConsumed
+			val, err := parseString(in)
+			if err != nil {
+				return err
+			}
 
-			if len(str) > 0 {
-				if count%2 == 0 {
-					key = str
-				} else {
-					db.dataMu.Lock()
-					db.Data[key] = storage.ExpiringValue{Val: str}
-					db.dataMu.Unlock()
+			s.auxiliary[key] = val
+		case selectDB:
+			_, _, err = parseLengthEncoding(in)
+			if err != nil {
+				return err
+			}
+		case resizeDB:
+			databaseHashTableSize, _, err = parseLengthEncoding(in)
+			if err != nil {
+				return err
+			}
+
+			_, _, err = parseLengthEncoding(in)
+			if err != nil {
+				return err
+			}
+
+			db := &RDBDatabase{
+				Data: make(map[string]value),
+				mu:   &sync.Mutex{},
+			}
+			s.DBs = append(s.DBs, db)
+
+			for range databaseHashTableSize {
+				var valType byte
+				var val value
+
+				kpF, err := parseByte(in)
+				if err != nil {
+					return err
 				}
-				count++
-			}
-			if startIdx >= len(data) || data[startIdx] == dbHeader || data[startIdx] == eofHeader {
-				break
-			}
-		}
 
-		rdbf.Dbs = append(rdbf.Dbs, db)
+				switch kpF {
+				case expireTimeMillis:
+					msBuffer := make([]byte, 8)
 
-		if startIdx >= len(data) || data[startIdx] == dbHeader || data[startIdx] == eofHeader {
-			break
+					err := binary.Read(in, binary.BigEndian, &msBuffer)
+					if err != nil {
+						return err
+					}
+
+					i := int64(msBuffer[0]) + int64(msBuffer[1])<<8 + int64(msBuffer[2])<<16 + int64(msBuffer[3])<<24 + int64(msBuffer[4])<<32 + int64(msBuffer[5])<<40 + int64(msBuffer[6])<<48 + int64(msBuffer[7])<<56
+					expiryTime := time.Unix(i/1000, i%1000*1000)
+					val.Exp = &expiryTime
+
+					valType, err = parseByte(in)
+					if err != nil {
+						return err
+					}
+				case expireTimeSec:
+					secBuffer := make([]byte, 4)
+
+					err := binary.Read(in, binary.BigEndian, &secBuffer)
+					if err != nil {
+						return err
+					}
+
+					i := int64(secBuffer[0]) + int64(secBuffer[1])<<8 + int64(secBuffer[2])<<16 + int64(secBuffer[3])<<24
+					expiryTime := time.Unix(i, 0)
+					val.Exp = &expiryTime
+
+					valType, err = parseByte(in)
+					if err != nil {
+						return err
+					}
+				default:
+					valType = kpF
+				}
+
+				key, err := parseString(in)
+				if err != nil {
+					return err
+				}
+				switch valType {
+				case 0:
+					val.Val, err = parseString(in)
+					if err != nil {
+						return err
+					}
+				default:
+					return errors.New("type is not implemented")
+				}
+
+				db.mu.Lock()
+				db.Data[key] = val
+				db.mu.Unlock()
+			}
+
+		case eof:
+			break outer
+		default:
+			return errors.New("unknown byte marker")
 		}
 	}
 
 	return nil
 }
 
-func isRDBDataValid(data []byte) (bool, error) {
-	if len(data) < 5 || !bytes.Equal(data[:5], []byte(rdbHeader)) {
-		return false, fmt.Errorf("file does not start with %s header", rdbHeader)
-	}
+func parseByte(io io.Reader) (byte, error) {
+	var fb byte
 
-	if len(data) < 9 {
-		return false, errors.New("version is either missing or invalid")
-	}
-
-	if dataIsMissingHeader(data, eofHeader) {
-		return false, errors.New("EOF is missing")
-	}
-
-	return true, nil
-}
-
-func dataIsMissingHeader(data []byte, header byte) bool {
-	return !bytes.Contains(data, []byte{header})
-}
-
-func parseSizeEncoding(data []byte) (dbNumber, bytesConsumed int, err error) {
-	firstByte := data[0]
-	firstTwoSignificantBits := (firstByte & 0b11000000)
-
-	switch firstTwoSignificantBits {
-	case byte(0b00000000):
-		return int(firstByte & 0b00111111), 1, nil
-	case byte(0b01000000):
-		secondByte := data[1]
-		return int((firstByte&0b00111111)<<8 | secondByte), 2, nil
-	case byte(0b10000000):
-		secondByte := data[1]
-		thirdByte := data[2]
-		fourthByte := data[3]
-		fifthByte := data[4]
-		return int(secondByte<<24 | thirdByte<<16 | fourthByte<<8 | fifthByte), 5, nil
-	case byte(0b11000000):
-		return -1, 0, errors.New("LZF compression is not supported")
-	}
-
-	return -1, 0, nil
-}
-
-func stringEncoding(data []byte) (str string, bytesConsumed int, err error) {
-	size, bytesConsumed, err := parseSizeEncoding(data)
+	err := binary.Read(io, binary.BigEndian, &fb)
 	if err != nil {
-		return "", 0, err
+		return 0, err
 	}
 
-	totalBytesConsumed := bytesConsumed + size
+	return fb, nil
+}
 
-	return string(data[bytesConsumed:totalBytesConsumed]), totalBytesConsumed, nil
+func parseLengthEncoding(in io.Reader) (int32, byte, error) {
+	f, err := parseByte(in)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	encType := f >> 6
+
+	switch encType {
+	case 0b00:
+		return int32(f & 0x3F), 0, nil
+	case 0b01:
+		s, err := parseByte(in)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		return int32(f&0x3F) + int32(s), 0, err
+	case 0b10:
+		var l int32
+
+		err := binary.Read(in, binary.LittleEndian, &l)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		return l, 0, err
+	case 0b11:
+		return 0, f, nil
+	default:
+		return 0, 0, errors.New("invalid string encoding")
+	}
+}
+
+func parseString(in io.Reader) (string, error) {
+	length, encoded, errLen := parseLengthEncoding(in)
+	if errLen != nil {
+		return "", errLen
+	}
+
+	if encoded == 0 {
+		buf := make([]byte, length)
+
+		err := binary.Read(in, binary.BigEndian, &buf)
+		if err != nil {
+			return "", err
+		}
+
+		return string(buf), err
+	}
+
+	switch encoded & byte(0x3F) {
+	case 0:
+		var l int8
+
+		err := binary.Read(in, binary.LittleEndian, &l)
+		if err != nil {
+			return "", err
+		}
+
+		return strconv.Itoa(int(l)), nil
+	case 1:
+		var l int16
+
+		err := binary.Read(in, binary.LittleEndian, &l)
+		if err != nil {
+			return "", err
+		}
+
+		return strconv.Itoa(int(l)), nil
+	case 2:
+		var l int32
+
+		err := binary.Read(in, binary.LittleEndian, &l)
+		if err != nil {
+			return "", err
+		}
+
+		return strconv.Itoa(int(l)), nil
+	case 3:
+		return "", errors.New("compressed is not support yet")
+	default:
+		return "", errors.New("invalid string (integer) encoding")
+	}
 }

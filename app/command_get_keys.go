@@ -2,7 +2,7 @@ package main
 
 import "net"
 
-func (s *server) handleCommandKeys(conn net.Conn, args []string) error {
+func (s *server) handleCommandKeys(conn net.Conn) error {
 	resp, err := respAsArray(s.getKeys())
 	if err != nil {
 		return err

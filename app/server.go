@@ -14,7 +14,7 @@ import (
 
 type server struct {
 	*serverConfig
-	data     map[string]storage.ExpiringValue
+	data     map[string]*storage.ExpiringValue
 	dataMu   *sync.RWMutex
 	slaves   []net.Conn
 	slavesMu *sync.Mutex
@@ -24,7 +24,7 @@ type server struct {
 func newServer(config *serverConfig) server {
 	return server{
 		serverConfig: config,
-		data:         make(map[string]storage.ExpiringValue),
+		data:         make(map[string]*storage.ExpiringValue),
 		dataMu:       &sync.RWMutex{},
 		slaves:       []net.Conn{},
 		slavesMu:     &sync.Mutex{},
@@ -141,19 +141,19 @@ func (s *server) loadRDB() (bool, error) {
 		return false, err
 	}
 
-	fmt.Println("RDB data: ", s.rdbFile.Data)
-
 	s.dataMu.Lock()
 	now := time.Now().UTC()
-	for key, rdbObj := range s.rdbFile.Data {
-		var expiresIn int
-		if rdbObj.Exp != nil {
-			expiresIn = int(rdbObj.Exp.Sub(now).Milliseconds())
-		}
-		s.data[key] = storage.ExpiringValue{
-			Val:       rdbObj.Val,
-			Created:   now,
-			ExpiresIn: expiresIn,
+	for _, db := range s.rdbFile.DBs {
+		for key, rdbObj := range db.Data {
+			var expiresIn int
+			if rdbObj.Exp != nil {
+				expiresIn = int(rdbObj.Exp.Sub(now).Milliseconds())
+			}
+			s.data[key] = &storage.ExpiringValue{
+				Val:       rdbObj.Val,
+				Created:   now,
+				ExpiresIn: expiresIn,
+			}
 		}
 	}
 	s.dataMu.Unlock()

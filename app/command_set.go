@@ -46,7 +46,7 @@ func (s *server) handleCommandSet(args []string) error {
 
 	key := string(args[0])
 
-	expVal := storage.ExpiringValue{
+	expVal := &storage.ExpiringValue{
 		Val:     args[1],
 		Created: time.Now().UTC(),
 	}

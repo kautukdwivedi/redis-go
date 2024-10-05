@@ -47,7 +47,7 @@ func (s *server) handleCommandOnMaster(conn net.Conn, cmd *command) error {
 	case "config get":
 		return s.handleCommandConfigGet(conn, cmd.args)
 	case "keys":
-		return s.handleCommandKeys(conn, cmd.args)
+		return s.handleCommandKeys(conn)
 	default:
 		return nil
 	}
@@ -70,7 +70,7 @@ func (s *server) handleCommandOnSlave(conn net.Conn, cmd *command) error {
 	case "config get":
 		err = s.handleCommandConfigGet(conn, cmd.args)
 	case "keys":
-		err = s.handleCommandKeys(conn, cmd.args)
+		err = s.handleCommandKeys(conn)
 	}
 
 	if err == nil {
