@@ -50,6 +50,8 @@ func (s *server) handleCommandOnMaster(conn net.Conn, cmd *command) error {
 		return s.handleCommandKeys(conn)
 	case "incr":
 		return s.handleCommandIncr(conn, cmd.args)
+	case "multi":
+		return s.handleCommandMulti(conn)
 	default:
 		return nil
 	}
