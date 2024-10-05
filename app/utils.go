@@ -70,6 +70,11 @@ func respAsInteger(data int) []byte {
 	return []byte(sb.String())
 }
 
+func respAsError(err string) []byte {
+	errStr := fmt.Sprint("-ERR", " ", err, carriageReturn())
+	return []byte(errStr)
+}
+
 func carriageReturn() string {
 	return "\r\n"
 }

@@ -19,10 +19,15 @@ func (s *server) handleCommandIncr(conn net.Conn, args []string) error {
 	} else {
 		val, err := strconv.Atoi(expVal.Val)
 		if err != nil {
-			return err
+			_, err = conn.Write(respAsError("value is not an integer or out of range"))
+			if err != nil {
+				return err
+			}
+			return nil
+		} else {
+			newVal = val + 1
+			s.data[key].Val = strconv.Itoa(newVal)
 		}
-		newVal = val + 1
-		s.data[key].Val = strconv.Itoa(newVal)
 	}
 	s.dataMu.Unlock()
 
