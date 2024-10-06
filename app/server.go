@@ -14,11 +14,11 @@ import (
 
 type server struct {
 	*serverConfig
-	data     map[string]*storage.ExpiringValue
-	dataMu   *sync.RWMutex
-	slaves   []net.Conn
-	slavesMu *sync.Mutex
-	ackChan  chan bool
+	data         map[string]*storage.ExpiringValue
+	dataMu       *sync.RWMutex
+	slaves       []net.Conn
+	slavesMu     *sync.Mutex
+	ackChan      chan bool
 }
 
 func newServer(config *serverConfig) server {
@@ -48,7 +48,7 @@ func (s *server) start() {
 			return
 		}
 
-		go s.handleConn(masterConn)
+		go s.handleClient(masterConn)
 	}
 
 	log.Fatal(s.listenAndServe())
@@ -68,16 +68,17 @@ func (s *server) listenAndServe() error {
 			continue
 		}
 
-		go s.handleConn(conn)
+		go s.handleClient(conn)
 	}
 }
 
-func (s *server) handleConn(conn net.Conn) {
-	defer conn.Close()
+func (s *server) handleClient(conn net.Conn) {
+	client := NewClient(conn)
+	defer client.Close()
 
 	buf := make([]byte, 1024)
 	for {
-		n, err := conn.Read(buf)
+		n, err := client.Conn.Read(buf)
 		if err != nil && err != io.EOF {
 			fmt.Println("Error reading from conn: ", err)
 			continue
@@ -85,11 +86,11 @@ func (s *server) handleConn(conn net.Conn) {
 
 		msgBuf := make([]byte, n)
 		copy(msgBuf, buf[:n])
-		s.handleRawMessage(conn, msgBuf)
+		s.handleRawMessage(client, msgBuf)
 	}
 }
 
-func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
+func (s *server) handleRawMessage(client *Client, msgBuf []byte) error {
 	cmds := &commands{
 		data: make([]*command, 0),
 	}
@@ -126,7 +127,7 @@ func (s *server) handleRawMessage(conn net.Conn, msgBuf []byte) error {
 	}
 
 	for _, command := range cmds.data {
-		err := s.handleCommand(conn, command)
+		err := s.handleCommand(client, command)
 		if err != nil {
 			fmt.Println("cmd error: ", err)
 		}

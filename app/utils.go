@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,10 +31,6 @@ func okSimpleString() []byte {
 }
 
 func respAsArray(resp []string) ([]byte, error) {
-	if len(resp) == 0 {
-		return nil, errors.New("empty resp content")
-	}
-
 	encoded := make([]byte, 0, 1024)
 
 	lenStr := strconv.Itoa(len(resp))

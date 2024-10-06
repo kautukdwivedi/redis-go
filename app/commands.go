@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"strings"
 )
 
@@ -14,71 +13,71 @@ const (
 	integer    Type = ':'
 )
 
-func (s *server) handleCommand(conn net.Conn, cmd *command) error {
+func (s *server) handleCommand(client *Client, cmd *command) error {
 	cmd.parse()
 
 	if s.isMaster() {
-		return s.handleCommandOnMaster(conn, cmd)
+		return s.handleCommandOnMaster(client, cmd)
 	} else {
-		return s.handleCommandOnSlave(conn, cmd)
+		return s.handleCommandOnSlave(client, cmd)
 	}
 }
 
-func (s *server) handleCommandOnMaster(conn net.Conn, cmd *command) error {
+func (s *server) handleCommandOnMaster(client *Client, cmd *command) error {
 	switch strings.ToLower(cmd.name) {
 	case "ping":
-		return s.handleCommandPing(conn)
+		return s.handleCommandPing(client)
 	case "echo":
-		return s.handleCommandEcho(conn, cmd.args)
+		return s.handleCommandEcho(client, cmd.args)
 	case "get":
-		return s.handleCommandGet(conn, cmd.args)
+		return s.handleCommandGet(client, cmd.args)
 	case "set":
-		return s.handleCommandSetOnMaster(conn, cmd.args)
+		return s.handleCommandSetOnMaster(client, cmd.args)
 	case "info":
-		return s.handleCommandInfo(conn, cmd.args)
+		return s.handleCommandInfo(client, cmd.args)
 	case "replconf":
-		return s.handleCommandReplconf(conn)
+		return s.handleCommandReplconf(client)
 	case "replconf ack":
 		return s.handleCommandReplconfAck()
 	case "psync":
-		return s.handleCommandPsync(conn)
+		return s.handleCommandPsync(client)
 	case "wait":
-		return s.handleCommandWait(conn, cmd.args)
+		return s.handleCommandWait(client, cmd.args)
 	case "config get":
-		return s.handleCommandConfigGet(conn, cmd.args)
+		return s.handleCommandConfigGet(client, cmd.args)
 	case "keys":
-		return s.handleCommandKeys(conn)
+		return s.handleCommandKeys(client)
 	case "incr":
-		return s.handleCommandIncr(conn, cmd.args)
+		return s.handleCommandIncr(client, cmd.args)
 	case "multi":
-		return s.handleCommandMulti(conn)
+		return s.handleCommandMulti(client)
 	case "exec":
-		return s.handleCommandExec(conn)
+		return s.handleCommandExec(client)
 	default:
 		return nil
 	}
 }
 
-func (s *server) handleCommandOnSlave(conn net.Conn, cmd *command) error {
+func (s *server) handleCommandOnSlave(client *Client, cmd *command) error {
 	var err error
 
 	switch strings.ToLower(cmd.name) {
 	case "echo":
-		err = s.handleCommandEcho(conn, cmd.args)
+		err = s.handleCommandEcho(client, cmd.args)
 	case "get":
-		err = s.handleCommandGet(conn, cmd.args)
+		err = s.handleCommandGet(client, cmd.args)
 	case "set":
 		err = s.handleCommandSetOnSlave(cmd.args)
 	case "info":
-		err = s.handleCommandInfo(conn, cmd.args)
+		err = s.handleCommandInfo(client, cmd.args)
 	case "replconf getack":
-		err = s.handleCommandReplconfGetAck(conn)
+		err = s.handleCommandReplconfGetAck(client)
 	case "config get":
-		err = s.handleCommandConfigGet(conn, cmd.args)
+		err = s.handleCommandConfigGet(client, cmd.args)
 	case "keys":
-		err = s.handleCommandKeys(conn)
+		err = s.handleCommandKeys(client)
 	case "incr":
-		err = s.handleCommandIncr(conn, cmd.args)
+		err = s.handleCommandIncr(client, cmd.args)
 	}
 
 	if err == nil {

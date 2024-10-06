@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-func (s *server) handleCommandWait(conn net.Conn, args []string) error {
+func (s *server) handleCommandWait(client *Client, args []string) error {
 	if len(s.data) == 0 {
-		_, err := conn.Write(respAsInteger(len(s.slaves)))
+		_, err := client.Write(respAsInteger(len(s.slaves)))
 		if err != nil {
 			return err
 		}
@@ -42,7 +42,7 @@ func (s *server) handleCommandWait(conn net.Conn, args []string) error {
 			}
 		}
 
-		_, err = conn.Write(respAsInteger(acks))
+		_, err = client.Write(respAsInteger(acks))
 		if err != nil {
 			return err
 		}

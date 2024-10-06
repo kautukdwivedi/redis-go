@@ -2,11 +2,10 @@ package main
 
 import (
 	"errors"
-	"net"
 	"strings"
 )
 
-func (s *server) handleCommandInfo(conn net.Conn, args []string) error {
+func (s *server) handleCommandInfo(client *Client, args []string) error {
 	if len(args) != 1 {
 		return errors.New("not yet supported")
 	}
@@ -15,7 +14,7 @@ func (s *server) handleCommandInfo(conn net.Conn, args []string) error {
 	case replication:
 		respStr := strings.Join(s.replicationInfo(), "\n")
 
-		_, err := conn.Write(respAsBulkString(respStr))
+		_, err := client.Write(respAsBulkString(respStr))
 		if err != nil {
 			return err
 		}

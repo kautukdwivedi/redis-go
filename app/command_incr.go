@@ -1,13 +1,12 @@
 package main
 
 import (
-	"net"
 	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
 )
 
-func (s *server) handleCommandIncr(conn net.Conn, args []string) error {
+func (s *server) handleCommandIncr(client *Client, args []string) error {
 	key := args[0]
 
 	s.dataMu.Lock()
@@ -19,7 +18,7 @@ func (s *server) handleCommandIncr(conn net.Conn, args []string) error {
 	} else {
 		val, err := strconv.Atoi(expVal.Val)
 		if err != nil {
-			_, err = conn.Write(respAsError("value is not an integer or out of range"))
+			_, err = client.Write(respAsError("value is not an integer or out of range"))
 			if err != nil {
 				return err
 			}
@@ -31,7 +30,7 @@ func (s *server) handleCommandIncr(conn net.Conn, args []string) error {
 	}
 	s.dataMu.Unlock()
 
-	_, err := conn.Write(respAsInteger(newVal))
+	_, err := client.Write(respAsInteger(newVal))
 	if err != nil {
 		return err
 	}

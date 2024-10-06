@@ -1,12 +1,11 @@
 package main
 
 import (
-	"net"
 	"strconv"
 )
 
-func (s *server) handleCommandReplconf(conn net.Conn) error {
-	_, err := conn.Write(okSimpleString())
+func (s *server) handleCommandReplconf(client *Client) error {
+	_, err := client.Write(okSimpleString())
 	if err != nil {
 		return err
 	}
@@ -18,13 +17,13 @@ func (s *server) handleCommandReplconfAck() error {
 	return nil
 }
 
-func (s *server) handleCommandReplconfGetAck(conn net.Conn) error {
+func (s *server) handleCommandReplconfGetAck(client *Client) error {
 	resp, err := respAsArray([]string{"REPLCONF", "ACK", strconv.Itoa(s.masterReplOffset)})
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.Write(resp)
+	_, err = client.Write(resp)
 	if err != nil {
 		return err
 	}

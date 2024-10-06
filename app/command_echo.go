@@ -2,15 +2,14 @@ package main
 
 import (
 	"errors"
-	"net"
 )
 
-func (s *server) handleCommandEcho(conn net.Conn, args []string) error {
+func (s *server) handleCommandEcho(client *Client, args []string) error {
 	if len(args) != 1 {
 		return errors.New("command echo must take one argument")
 	}
 
-	_, err := conn.Write(respAsSimpleString(args[0]))
+	_, err := client.Write(respAsSimpleString(args[0]))
 	if err != nil {
 		return err
 	}

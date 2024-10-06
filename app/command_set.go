@@ -3,20 +3,19 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
 )
 
-func (s *server) handleCommandSetOnMaster(conn net.Conn, args []string) error {
+func (s *server) handleCommandSetOnMaster(client *Client, args []string) error {
 	err := s.handleCommandSet(args)
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.Write(okSimpleString())
+	_, err = client.Write(okSimpleString())
 	if err != nil {
 		return err
 	}

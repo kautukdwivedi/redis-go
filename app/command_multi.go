@@ -1,11 +1,15 @@
 package main
 
-import "net"
-
-func (s *server) handleCommandMulti(conn net.Conn) error {
-	_, err := conn.Write(okSimpleString())
+func (s *server) handleCommandMulti(client *Client) error {
+	err := client.Transaction.Open()
 	if err != nil {
 		return err
 	}
+
+	_, err = client.Write(okSimpleString())
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

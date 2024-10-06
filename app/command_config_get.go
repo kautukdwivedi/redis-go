@@ -1,11 +1,10 @@
 package main
 
 import (
-	"net"
 	"strings"
 )
 
-func (s *server) handleCommandConfigGet(conn net.Conn, args []string) error {
+func (s *server) handleCommandConfigGet(client *Client, args []string) error {
 	key := args[0]
 	var val string
 
@@ -22,7 +21,7 @@ func (s *server) handleCommandConfigGet(conn net.Conn, args []string) error {
 			return err
 		}
 
-		_, err = conn.Write(resp)
+		_, err = client.Write(resp)
 		if err != nil {
 			return err
 		}

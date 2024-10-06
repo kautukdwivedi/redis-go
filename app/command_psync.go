@@ -3,14 +3,12 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"net"
 )
 
-
-func (s *server) handleCommandPsync(conn net.Conn) error {
+func (s *server) handleCommandPsync(client *Client) error {
 	resp := fmt.Sprintf("FULLRESYNC %s %d", s.masterReplId, s.masterReplOffset)
 
-	_, err := conn.Write(respAsSimpleString(resp))
+	_, err := client.Write(respAsSimpleString(resp))
 	if err != nil {
 		return err
 	}
@@ -21,14 +19,14 @@ func (s *server) handleCommandPsync(conn net.Conn) error {
 		return err
 	}
 
-	_, err = conn.Write(respAsFileData(fileData))
+	_, err = client.Write(respAsFileData(fileData))
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("Adding slave...")
 	s.slavesMu.Lock()
-	s.slaves = append(s.slaves, conn)
+	s.slaves = append(s.slaves, client.Conn)
 	s.slavesMu.Unlock()
 
 	s.dataMu.RLock()
@@ -50,7 +48,7 @@ func (s *server) handleCommandPsync(conn net.Conn) error {
 			continue
 		}
 
-		_, err = conn.Write(r)
+		_, err = client.Write(r)
 		if err != nil {
 			return err
 		}

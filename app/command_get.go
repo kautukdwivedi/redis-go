@@ -2,10 +2,9 @@ package main
 
 import (
 	"errors"
-	"net"
 )
 
-func (s *server) handleCommandGet(conn net.Conn, args []string) error {
+func (s *server) handleCommandGet(client *Client, args []string) error {
 	if len(args) != 1 {
 		return errors.New("command get must take one argument")
 	}
@@ -16,7 +15,7 @@ func (s *server) handleCommandGet(conn net.Conn, args []string) error {
 	expVal, ok := s.data[args[0]]
 	s.dataMu.RUnlock()
 	if !ok {
-		_, err := conn.Write(nullBulkString)
+		_, err := client.Write(nullBulkString)
 		if err != nil {
 			return err
 		}
@@ -25,7 +24,7 @@ func (s *server) handleCommandGet(conn net.Conn, args []string) error {
 	}
 
 	if expVal.HasExpired() {
-		_, err := conn.Write(nullBulkString)
+		_, err := client.Write(nullBulkString)
 		if err != nil {
 			return err
 		}
@@ -33,7 +32,7 @@ func (s *server) handleCommandGet(conn net.Conn, args []string) error {
 		return nil
 	}
 
-	_, err := conn.Write(respAsBulkString(string(expVal.Val)))
+	_, err := client.Write(respAsBulkString(string(expVal.Val)))
 	if err != nil {
 		return err
 	}
