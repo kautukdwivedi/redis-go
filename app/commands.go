@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 )
 
 type Type byte
@@ -17,6 +16,16 @@ func (s *server) handleCommand(client *Client, cmd *command) error {
 	cmd.parse()
 
 	if s.isMaster() {
+		if client.Transaction.isOpen {
+			if cmd.name != "MULTI" && cmd.name != "EXEC" {
+				client.Transaction.Queue = append(client.Transaction.Queue, cmd)
+				_, err := client.Write(respAsSimpleString("QUEUED"))
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+		}
 		return s.handleCommandOnMaster(client, cmd)
 	} else {
 		return s.handleCommandOnSlave(client, cmd)
@@ -24,34 +33,34 @@ func (s *server) handleCommand(client *Client, cmd *command) error {
 }
 
 func (s *server) handleCommandOnMaster(client *Client, cmd *command) error {
-	switch strings.ToLower(cmd.name) {
-	case "ping":
+	switch cmd.name {
+	case "PING":
 		return s.handleCommandPing(client)
-	case "echo":
+	case "ECHO":
 		return s.handleCommandEcho(client, cmd.args)
-	case "get":
+	case "GET":
 		return s.handleCommandGet(client, cmd.args)
-	case "set":
+	case "SET":
 		return s.handleCommandSetOnMaster(client, cmd.args)
-	case "info":
+	case "INFO":
 		return s.handleCommandInfo(client, cmd.args)
-	case "replconf":
+	case "REPLCONF":
 		return s.handleCommandReplconf(client)
-	case "replconf ack":
+	case "REPLCONF ACK":
 		return s.handleCommandReplconfAck()
-	case "psync":
+	case "PSYNC":
 		return s.handleCommandPsync(client)
-	case "wait":
+	case "WAIT":
 		return s.handleCommandWait(client, cmd.args)
-	case "config get":
+	case "CONFIG GET":
 		return s.handleCommandConfigGet(client, cmd.args)
-	case "keys":
+	case "KEYS":
 		return s.handleCommandKeys(client)
-	case "incr":
+	case "INCR":
 		return s.handleCommandIncr(client, cmd.args)
-	case "multi":
+	case "MULTI":
 		return s.handleCommandMulti(client)
-	case "exec":
+	case "EXEC":
 		return s.handleCommandExec(client)
 	default:
 		return nil
@@ -61,23 +70,21 @@ func (s *server) handleCommandOnMaster(client *Client, cmd *command) error {
 func (s *server) handleCommandOnSlave(client *Client, cmd *command) error {
 	var err error
 
-	switch strings.ToLower(cmd.name) {
-	case "echo":
+	switch cmd.name {
+	case "ECHO":
 		err = s.handleCommandEcho(client, cmd.args)
-	case "get":
+	case "GET":
 		err = s.handleCommandGet(client, cmd.args)
-	case "set":
+	case "SET":
 		err = s.handleCommandSetOnSlave(cmd.args)
-	case "info":
+	case "INFO":
 		err = s.handleCommandInfo(client, cmd.args)
-	case "replconf getack":
+	case "REPLCONF GETACK":
 		err = s.handleCommandReplconfGetAck(client)
-	case "config get":
+	case "CONFIG GET":
 		err = s.handleCommandConfigGet(client, cmd.args)
-	case "keys":
+	case "KEYS":
 		err = s.handleCommandKeys(client)
-	case "incr":
-		err = s.handleCommandIncr(client, cmd.args)
 	}
 
 	if err == nil {
