@@ -6,7 +6,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
 )
 
-func (s *server) handleCommandIncr(client *Client, args []string) error {
+func (s *server) handleCommandIncr(client *Client, args []string) ([]byte, error) {
 	key := args[0]
 
 	s.dataMu.Lock()
@@ -18,11 +18,7 @@ func (s *server) handleCommandIncr(client *Client, args []string) error {
 	} else {
 		val, err := strconv.Atoi(expVal.Val)
 		if err != nil {
-			_, err = client.Write(respAsError("value is not an integer or out of range"))
-			if err != nil {
-				return err
-			}
-			return nil
+			return respAsError("value is not an integer or out of range"), nil
 		} else {
 			newVal = val + 1
 			s.data[key].Val = strconv.Itoa(newVal)
@@ -30,10 +26,5 @@ func (s *server) handleCommandIncr(client *Client, args []string) error {
 	}
 	s.dataMu.Unlock()
 
-	_, err := client.Write(respAsInteger(newVal))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return respAsInteger(newVal), nil
 }

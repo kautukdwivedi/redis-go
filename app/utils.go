@@ -46,6 +46,22 @@ func respAsArray(resp []string) ([]byte, error) {
 	return encoded, nil
 }
 
+func respAsByteArrays(resps [][]byte) ([]byte, error) {
+	encoded := make([]byte, 0, 1024)
+
+	lenStr := strconv.Itoa(len(resps))
+
+	encoded = append(encoded, byte(array))
+	encoded = append(encoded, []byte(lenStr)...)
+	encoded = append(encoded, []byte(carriageReturn())...)
+
+	for _, r := range resps {
+		encoded = append(encoded, r...)
+	}
+
+	return encoded, nil
+}
+
 func respAsFileData(data []byte) []byte {
 	resp := []byte{}
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-func (s *server) handleCommandConfigGet(client *Client, args []string) error {
+func (s *server) handleCommandConfigGet(client *Client, args []string) ([]byte, error) {
 	key := args[0]
 	var val string
 
@@ -16,16 +16,8 @@ func (s *server) handleCommandConfigGet(client *Client, args []string) error {
 	}
 
 	if len(val) > 0 {
-		resp, err := respAsArray([]string{key, val})
-		if err != nil {
-			return err
-		}
-
-		_, err = client.Write(resp)
-		if err != nil {
-			return err
-		}
+		return respAsArray([]string{key, val})
 	}
 
-	return nil
+	return nil, nil
 }

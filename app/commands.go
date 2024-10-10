@@ -15,24 +15,46 @@ const (
 func (s *server) handleCommand(client *Client, cmd *command) error {
 	cmd.parse()
 
-	if s.isMaster() {
-		if client.Transaction.isOpen {
-			if cmd.name != "MULTI" && cmd.name != "EXEC" {
-				client.Transaction.Queue = append(client.Transaction.Queue, cmd)
-				_, err := client.Write(respAsSimpleString("QUEUED"))
-				if err != nil {
-					return err
-				}
-				return nil
-			}
+	if client.Transaction.isOpen && cmd.isQueable {
+		client.Transaction.Queue = append(client.Transaction.Queue, cmd)
+		_, err := client.Write(respAsSimpleString("QUEUED"))
+		if err != nil {
+			return err
 		}
-		return s.handleCommandOnMaster(client, cmd)
-	} else {
-		return s.handleCommandOnSlave(client, cmd)
+		return nil
 	}
+
+	var resp []byte
+	var err error
+
+	if s.isMaster() {
+		resp, err = s.handleCommandOnMaster(client, cmd)
+		if cmd.isWrite {
+			go func() {
+				err := s.propagateCommandToSlaves(cmd)
+				if err != nil {
+					fmt.Println("Failed propagating to slaves: ", err)
+				}
+			}()
+		}
+	} else {
+		resp, err = s.handleCommandOnSlave(client, cmd)
+	}
+	if err != nil {
+		return err
+	}
+
+	if len(resp) > 0 {
+		_, err = client.Write(resp)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-func (s *server) handleCommandOnMaster(client *Client, cmd *command) error {
+func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byte, err error) {
 	switch cmd.name {
 	case "PING":
 		return s.handleCommandPing(client)
@@ -63,41 +85,39 @@ func (s *server) handleCommandOnMaster(client *Client, cmd *command) error {
 	case "EXEC":
 		return s.handleCommandExec(client)
 	default:
-		return nil
+		return nil, nil
 	}
 }
 
-func (s *server) handleCommandOnSlave(client *Client, cmd *command) error {
-	var err error
-
+func (s *server) handleCommandOnSlave(client *Client, cmd *command) (resp []byte, err error) {
 	switch cmd.name {
 	case "ECHO":
-		err = s.handleCommandEcho(client, cmd.args)
+		resp, err = s.handleCommandEcho(client, cmd.args)
 	case "GET":
-		err = s.handleCommandGet(client, cmd.args)
+		resp, err = s.handleCommandGet(client, cmd.args)
 	case "SET":
-		err = s.handleCommandSetOnSlave(cmd.args)
+		resp, err = s.handleCommandSetOnSlave(cmd.args)
 	case "INFO":
-		err = s.handleCommandInfo(client, cmd.args)
+		resp, err = s.handleCommandInfo(client, cmd.args)
 	case "REPLCONF GETACK":
-		err = s.handleCommandReplconfGetAck(client)
+		resp, err = s.handleCommandReplconfGetAck(client)
 	case "CONFIG GET":
-		err = s.handleCommandConfigGet(client, cmd.args)
+		resp, err = s.handleCommandConfigGet(client, cmd.args)
 	case "KEYS":
-		err = s.handleCommandKeys(client)
+		resp, err = s.handleCommandKeys(client)
 	}
 
 	if err == nil {
 		s.masterReplOffset += cmd.bytesLength()
 	}
 
-	return err
+	return resp, err
 }
 
-func (s *server) propagateCommandToSlaves(comm string, args []string) error {
-	argsStr := make([]string, 0, len(args)+1)
-	argsStr = append(argsStr, comm)
-	argsStr = append(argsStr, args...)
+func (s *server) propagateCommandToSlaves(cmd *command) error {
+	argsStr := make([]string, 0, len(cmd.args)+1)
+	argsStr = append(argsStr, cmd.name)
+	argsStr = append(argsStr, cmd.args...)
 
 	resp, err := respAsArray(argsStr)
 	if err != nil {

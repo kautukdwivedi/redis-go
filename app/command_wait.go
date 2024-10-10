@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-func (s *server) handleCommandWait(client *Client, args []string) error {
+func (s *server) handleCommandWait(client *Client, args []string) ([]byte, error) {
 	if len(s.data) == 0 {
 		_, err := client.Write(respAsInteger(len(s.slaves)))
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 	} else {
@@ -21,12 +21,12 @@ func (s *server) handleCommandWait(client *Client, args []string) error {
 
 		requestedSlaves, err := strconv.Atoi(args[0])
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		timeout, err := strconv.Atoi(args[1])
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		acks := 0
@@ -44,11 +44,11 @@ func (s *server) handleCommandWait(client *Client, args []string) error {
 
 		_, err = client.Write(respAsInteger(acks))
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 func getAckFromSlave(slave net.Conn) {

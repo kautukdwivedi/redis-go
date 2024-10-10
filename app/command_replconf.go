@@ -4,29 +4,29 @@ import (
 	"strconv"
 )
 
-func (s *server) handleCommandReplconf(client *Client) error {
+func (s *server) handleCommandReplconf(client *Client) ([]byte, error) {
 	_, err := client.Write(okSimpleString())
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return nil, nil
 }
 
-func (s *server) handleCommandReplconfAck() error {
+func (s *server) handleCommandReplconfAck() ([]byte, error) {
 	s.ackChan <- true
-	return nil
+	return nil, nil
 }
 
-func (s *server) handleCommandReplconfGetAck(client *Client) error {
+func (s *server) handleCommandReplconfGetAck(client *Client) ([]byte, error) {
 	resp, err := respAsArray([]string{"REPLCONF", "ACK", strconv.Itoa(s.masterReplOffset)})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = client.Write(resp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return nil, nil
 }

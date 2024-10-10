@@ -9,28 +9,17 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
 )
 
-func (s *server) handleCommandSetOnMaster(client *Client, args []string) error {
+func (s *server) handleCommandSetOnMaster(client *Client, args []string) ([]byte, error) {
 	err := s.handleCommandSet(args)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = client.Write(okSimpleString())
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		err := s.propagateCommandToSlaves("SET", args)
-		if err != nil {
-			fmt.Println("Failed propagating to slaves: ", err)
-		}
-	}()
-	return nil
+	return okSimpleString(), nil
 }
 
-func (s *server) handleCommandSetOnSlave(args []string) error {
-	return s.handleCommandSet(args)
+func (s *server) handleCommandSetOnSlave(args []string) ([]byte, error) {
+	return nil, s.handleCommandSet(args)
 }
 
 func (s *server) handleCommandSet(args []string) error {

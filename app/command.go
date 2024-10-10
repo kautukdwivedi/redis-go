@@ -13,9 +13,11 @@ func (cmds *commands) append(cmd *command) {
 }
 
 type command struct {
-	rawBytes []byte
-	name     string
-	args     []string
+	rawBytes  []byte
+	name      string
+	args      []string
+	isQueable bool
+	isWrite   bool
 }
 
 func (c *command) append(b byte) {
@@ -43,4 +45,11 @@ func (c *command) parse() {
 	}
 
 	c.name = strings.Join(namePieces, " ")
+	switch c.name {
+	case "ECHO", "GET", "KEYS":
+		c.isQueable = true
+	case "INCR", "SET":
+		c.isQueable = true
+		c.isWrite = true
+	}
 }

@@ -5,23 +5,23 @@ import (
 	"fmt"
 )
 
-func (s *server) handleCommandPsync(client *Client) error {
+func (s *server) handleCommandPsync(client *Client) ([]byte, error) {
 	resp := fmt.Sprintf("FULLRESYNC %s %d", s.masterReplId, s.masterReplOffset)
 
 	_, err := client.Write(respAsSimpleString(resp))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	emptyFileBase64 := "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="
 	fileData, err := base64.StdEncoding.DecodeString(emptyFileBase64)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = client.Write(respAsFileData(fileData))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fmt.Println("Adding slave...")
@@ -50,10 +50,10 @@ func (s *server) handleCommandPsync(client *Client) error {
 
 		_, err = client.Write(r)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	s.dataMu.RUnlock()
 
-	return nil
+	return nil, nil
 }

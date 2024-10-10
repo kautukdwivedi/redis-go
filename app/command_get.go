@@ -4,9 +4,9 @@ import (
 	"errors"
 )
 
-func (s *server) handleCommandGet(client *Client, args []string) error {
+func (s *server) handleCommandGet(client *Client, args []string) ([]byte, error) {
 	if len(args) != 1 {
-		return errors.New("command get must take one argument")
+		return nil, errors.New("command get must take one argument")
 	}
 
 	nullBulkString := respAsBulkString("")
@@ -14,28 +14,10 @@ func (s *server) handleCommandGet(client *Client, args []string) error {
 	s.dataMu.RLock()
 	expVal, ok := s.data[args[0]]
 	s.dataMu.RUnlock()
-	if !ok {
-		_, err := client.Write(nullBulkString)
-		if err != nil {
-			return err
-		}
 
-		return nil
+	if !ok || expVal.HasExpired() {
+		return nullBulkString, nil
 	}
 
-	if expVal.HasExpired() {
-		_, err := client.Write(nullBulkString)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	_, err := client.Write(respAsBulkString(string(expVal.Val)))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return respAsBulkString(string(expVal.Val)), nil
 }
