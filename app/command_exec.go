@@ -19,7 +19,7 @@ func (s *server) handleCommandExec(client *Client) error {
 			for _, cmd := range client.Transaction.Queue {
 				resp, err := s.handleCommandOnMaster(client, cmd)
 				if err != nil {
-					return err
+					resp = respAsError(err.Error())
 				}
 				resps = append(resps, resp)
 			}
