@@ -84,6 +84,8 @@ func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byt
 		return nil, s.handleCommandMulti(client)
 	case "EXEC":
 		return nil, s.handleCommandExec(client)
+	case "DISCARD":
+		return nil, s.handleCommandDiscard(client)
 	default:
 		return nil, nil
 	}

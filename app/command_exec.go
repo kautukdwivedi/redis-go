@@ -33,16 +33,14 @@ func (s *server) handleCommandExec(client *Client) error {
 					return err
 				}
 			}
-			go func() {
-				for _, cmd := range client.Transaction.Queue {
-					if cmd.isWrite {
-						err := s.propagateCommandToSlaves(cmd)
-						if err != nil {
-							fmt.Println("Failed propagating to slaves: ", err)
-						}
+			for _, cmd := range client.Transaction.Queue {
+				if cmd.isWrite {
+					err := s.propagateCommandToSlaves(cmd)
+					if err != nil {
+						fmt.Println("Failed propagating to slaves: ", err)
 					}
 				}
-			}()
+			}
 		}
 	}
 

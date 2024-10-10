@@ -43,6 +43,7 @@ func (t *Transaction) Close() error {
 	defer t.mu.Unlock()
 
 	if t.isOpen {
+		clear(t.Queue)
 		t.isOpen = false
 		return nil
 	}
