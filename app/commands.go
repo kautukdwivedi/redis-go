@@ -57,33 +57,33 @@ func (s *server) handleCommand(client *Client, cmd *command) error {
 func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byte, err error) {
 	switch cmd.name {
 	case "PING":
-		return s.handleCommandPing(client)
+		return nil, s.handleCommandPing(client)
 	case "ECHO":
-		return s.handleCommandEcho(client, cmd.args)
+		return s.handleCommandEcho(cmd.args)
 	case "GET":
-		return s.handleCommandGet(client, cmd.args)
+		return s.handleCommandGet(cmd.args)
 	case "SET":
-		return s.handleCommandSetOnMaster(client, cmd.args)
+		return s.handleCommandSetOnMaster(cmd.args)
 	case "INFO":
-		return s.handleCommandInfo(client, cmd.args)
+		return nil, s.handleCommandInfo(client, cmd.args)
 	case "REPLCONF":
-		return s.handleCommandReplconf(client)
+		return nil, s.handleCommandReplconf(client)
 	case "REPLCONF ACK":
-		return s.handleCommandReplconfAck()
+		return nil, s.handleCommandReplconfAck()
 	case "PSYNC":
-		return s.handleCommandPsync(client)
+		return nil, s.handleCommandPsync(client)
 	case "WAIT":
-		return s.handleCommandWait(client, cmd.args)
+		return nil, s.handleCommandWait(client, cmd.args)
 	case "CONFIG GET":
-		return s.handleCommandConfigGet(client, cmd.args)
+		return s.handleCommandConfigGet(cmd.args)
 	case "KEYS":
-		return s.handleCommandKeys(client)
+		return s.handleCommandKeys()
 	case "INCR":
-		return s.handleCommandIncr(client, cmd.args)
+		return s.handleCommandIncr(cmd.args)
 	case "MULTI":
-		return s.handleCommandMulti(client)
+		return nil, s.handleCommandMulti(client)
 	case "EXEC":
-		return s.handleCommandExec(client)
+		return nil, s.handleCommandExec(client)
 	default:
 		return nil, nil
 	}
@@ -92,19 +92,17 @@ func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byt
 func (s *server) handleCommandOnSlave(client *Client, cmd *command) (resp []byte, err error) {
 	switch cmd.name {
 	case "ECHO":
-		resp, err = s.handleCommandEcho(client, cmd.args)
+		resp, err = s.handleCommandEcho(cmd.args)
 	case "GET":
-		resp, err = s.handleCommandGet(client, cmd.args)
+		resp, err = s.handleCommandGet(cmd.args)
 	case "SET":
 		resp, err = s.handleCommandSetOnSlave(cmd.args)
 	case "INFO":
-		resp, err = s.handleCommandInfo(client, cmd.args)
+		err = s.handleCommandInfo(client, cmd.args)
 	case "REPLCONF GETACK":
-		resp, err = s.handleCommandReplconfGetAck(client)
-	case "CONFIG GET":
-		resp, err = s.handleCommandConfigGet(client, cmd.args)
-	case "KEYS":
-		resp, err = s.handleCommandKeys(client)
+		err = s.handleCommandReplconfGetAck(client)
+	case "INCR":
+		resp, err = s.handleCommandIncr(cmd.args)
 	}
 
 	if err == nil {

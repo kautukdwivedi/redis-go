@@ -4,7 +4,7 @@ import (
 	"errors"
 )
 
-func (s *server) handleCommandGet(client *Client, args []string) ([]byte, error) {
+func (s *server) handleCommandGet(args []string) ([]byte, error) {
 	if len(args) != 1 {
 		return nil, errors.New("command get must take one argument")
 	}

@@ -1,10 +1,14 @@
 package main
 
-func (s *server) handleCommandMulti(client *Client) ([]byte, error) {
+func (s *server) handleCommandMulti(client *Client) error {
 	err := client.Transaction.Open()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return okSimpleString(), nil
+	_, err = client.Write(okSimpleString())
+	if err != nil {
+		return err
+	}
+	return nil
 }

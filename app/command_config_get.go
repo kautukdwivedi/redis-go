@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-func (s *server) handleCommandConfigGet(client *Client, args []string) ([]byte, error) {
+func (s *server) handleCommandConfigGet(args []string) ([]byte, error) {
 	key := args[0]
 	var val string
 

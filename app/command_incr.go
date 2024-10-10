@@ -6,7 +6,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
 )
 
-func (s *server) handleCommandIncr(client *Client, args []string) ([]byte, error) {
+func (s *server) handleCommandIncr(args []string) ([]byte, error) {
 	key := args[0]
 
 	s.dataMu.Lock()

@@ -1,9 +1,12 @@
 package main
 
-func (s *server) handleCommandPing(client *Client) ([]byte, error) {
+func (s *server) handleCommandPing(client *Client) error {
 	if s.isMaster() {
-		return respAsSimpleString("PONG"), nil
+		_, err := client.Write(respAsSimpleString("PONG"))
+		if err != nil {
+			return err
+		}
 	}
 
-	return nil, nil
+	return nil
 }

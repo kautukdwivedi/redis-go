@@ -7,18 +7,17 @@ import (
 	"net"
 	"sync"
 	"time"
-	"unicode"
 
 	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
 )
 
 type server struct {
 	*serverConfig
-	data         map[string]*storage.ExpiringValue
-	dataMu       *sync.RWMutex
-	slaves       []net.Conn
-	slavesMu     *sync.Mutex
-	ackChan      chan bool
+	data     map[string]*storage.ExpiringValue
+	dataMu   *sync.RWMutex
+	slaves   []net.Conn
+	slavesMu *sync.Mutex
+	ackChan  chan bool
 }
 
 func newServer(config *serverConfig) server {
@@ -91,42 +90,9 @@ func (s *server) handleClient(conn net.Conn) {
 }
 
 func (s *server) handleRawMessage(client *Client, msgBuf []byte) error {
-	cmds := &commands{
-		data: make([]*command, 0),
-	}
-	var cmd *command
+	cmds := parseRawMessage(msgBuf)
 
-	for _, b := range msgBuf {
-		bRune := rune(b)
-		switch {
-		case bRune == '*':
-			cmd = &command{
-				rawBytes: []byte{b},
-				args:     make([]string, 0),
-			}
-			cmds.append(cmd)
-		case unicode.IsDigit(bRune):
-			if cmd == nil {
-				continue
-			}
-			cmd.append(b)
-		default:
-			if cmd == nil {
-				continue
-			}
-			n := len(cmds.data) - 1
-			lastCmd := cmds.data[n]
-			if len(lastCmd.rawBytes) == 1 && lastCmd.rawBytes[0] == '*' {
-				cmds.data = cmds.data[:n]
-				n = len(cmds.data) - 1
-				cmd = cmds.data[n]
-				cmd.append('*')
-			}
-			cmd.append(b)
-		}
-	}
-
-	for _, command := range cmds.data {
+	for _, command := range cmds {
 		err := s.handleCommand(client, command)
 		if err != nil {
 			fmt.Println("cmd error: ", err)

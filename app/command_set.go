@@ -9,7 +9,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/internal/storage"
 )
 
-func (s *server) handleCommandSetOnMaster(client *Client, args []string) ([]byte, error) {
+func (s *server) handleCommandSetOnMaster(args []string) ([]byte, error) {
 	err := s.handleCommandSet(args)
 	if err != nil {
 		return nil, err

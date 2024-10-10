@@ -4,14 +4,6 @@ import (
 	"strings"
 )
 
-type commands struct {
-	data []*command
-}
-
-func (cmds *commands) append(cmd *command) {
-	cmds.data = append(cmds.data, cmd)
-}
-
 type command struct {
 	rawBytes  []byte
 	name      string
