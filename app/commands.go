@@ -86,6 +86,8 @@ func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byt
 		return nil, s.handleCommandExec(client)
 	case "DISCARD":
 		return nil, s.handleCommandDiscard(client)
+	case "TYPE":
+		return s.handleCommandType(cmd.args)
 	default:
 		return nil, nil
 	}
@@ -105,6 +107,8 @@ func (s *server) handleCommandOnSlave(client *Client, cmd *command) (resp []byte
 		err = s.handleCommandReplconfGetAck(client)
 	case "INCR":
 		resp, err = s.handleCommandIncr(cmd.args)
+	case "TYPE":
+		resp, err = s.handleCommandType(cmd.args)
 	}
 
 	if err == nil {

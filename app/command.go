@@ -38,7 +38,7 @@ func (c *command) parse() {
 
 	c.name = strings.Join(namePieces, " ")
 	switch c.name {
-	case "ECHO", "GET", "KEYS":
+	case "ECHO", "GET", "KEYS", "TYPE":
 		c.isQueable = true
 	case "INCR", "SET":
 		c.isQueable = true
