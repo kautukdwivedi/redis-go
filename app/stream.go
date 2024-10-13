@@ -57,14 +57,40 @@ func (s *Stream) NewStreamEntryId(id string) (*StreamEntryId, error) {
 		return nil, ErrInvalidStreamEntrId
 	}
 
-	millisTime, err := strconv.Atoi(pieces[0])
-	if err != nil {
-		return nil, ErrInvalidStreamEntrId
+	var millisTime int
+	var sequenceNr int
+
+	if pieces[0] == "*" {
+		if s.isEmpty() {
+			millisTime = 0
+		} else {
+			millisTime = s.lastEntry().ID.MillisTime + 1
+		}
+	} else {
+		ms, err := strconv.Atoi(pieces[0])
+		if err != nil {
+			return nil, ErrInvalidStreamEntrId
+		}
+		millisTime = ms
 	}
 
-	sequenceNr, err := strconv.Atoi(pieces[1])
-	if err != nil {
-		return nil, ErrInvalidStreamEntrId
+	if pieces[1] == "*" {
+		if s.isEmpty() {
+			sequenceNr = 1
+		} else {
+			matchingEntry := s.findEntryByMillis(millisTime)
+			if matchingEntry == nil {
+				sequenceNr = 0
+			} else {
+				sequenceNr = matchingEntry.ID.SequenceNr + 1
+			}
+		}
+	} else {
+		nr, err := strconv.Atoi(pieces[1])
+		if err != nil {
+			return nil, ErrInvalidStreamEntrId
+		}
+		sequenceNr = nr
 	}
 
 	if millisTime <= 0 && sequenceNr <= 0 {
@@ -99,6 +125,16 @@ func (s *Stream) isEmpty() bool {
 
 func (s *Stream) lastEntry() *StreamEntry {
 	return s.Entries[len(s.Entries)-1]
+}
+
+func (s *Stream) findEntryByMillis(millis int) *StreamEntry {
+	for _, entry := range s.Entries {
+		if entry.ID.MillisTime == millis {
+			return entry
+		}
+	}
+
+	return nil
 }
 
 func (e *StreamEntry) AddData(key, val string) {

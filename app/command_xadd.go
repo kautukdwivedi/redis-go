@@ -23,5 +23,5 @@ func (s *server) handleCommandXADD(args []string) ([]byte, error) {
 		entry.AddData(args[i], args[i+1])
 	}
 
-	return respAsBulkString(rawId), nil
+	return respAsBulkString(entry.ID.String()), nil
 }
