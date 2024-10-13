@@ -18,6 +18,7 @@ type server struct {
 	slaves   []net.Conn
 	slavesMu *sync.Mutex
 	ackChan  chan bool
+	streams  []*Stream
 }
 
 func newServer(config *serverConfig) server {
@@ -28,6 +29,7 @@ func newServer(config *serverConfig) server {
 		slaves:       []net.Conn{},
 		slavesMu:     &sync.Mutex{},
 		ackChan:      make(chan bool),
+		streams:      make([]*Stream, 0),
 	}
 }
 
@@ -137,4 +139,14 @@ func (s *server) getKeys() []string {
 		keys = append(keys, key)
 	}
 	return keys
+}
+
+func (s *server) findStream(key string) *Stream {
+	for _, str := range s.streams {
+		if str.Key == key {
+			return str
+		}
+	}
+
+	return nil
 }

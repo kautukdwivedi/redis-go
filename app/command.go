@@ -40,7 +40,7 @@ func (c *command) parse() {
 	switch c.name {
 	case "ECHO", "GET", "KEYS", "TYPE":
 		c.isQueable = true
-	case "INCR", "SET":
+	case "INCR", "SET", "XADD":
 		c.isQueable = true
 		c.isWrite = true
 	}

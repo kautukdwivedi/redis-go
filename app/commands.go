@@ -88,6 +88,8 @@ func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byt
 		return nil, s.handleCommandDiscard(client)
 	case "TYPE":
 		return s.handleCommandType(cmd.args)
+	case "XADD":
+		return s.handleCommandXADD(cmd.args)
 	default:
 		return nil, nil
 	}
