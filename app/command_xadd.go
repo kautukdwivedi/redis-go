@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 func (s *server) handleCommandXADD(args []string) ([]byte, error) {
 	streamKey := args[0]
 
@@ -9,13 +11,17 @@ func (s *server) handleCommandXADD(args []string) ([]byte, error) {
 		s.streams = append(s.streams, stream)
 	}
 
-	entryId := args[1]
-	entry := NewStreamEntry(entryId)
+	rawId := args[1]
+	entry, err := stream.NewStreamEntry(rawId)
+	if err != nil {
+		return respAsError(fmt.Sprint("The ID specified in XADD ", err.Error())), nil
+	}
+
 	stream.AddEntry(entry)
 
 	for i := 2; i < len(args)-1; i += 2 {
 		entry.AddData(args[i], args[i+1])
 	}
 
-	return respAsBulkString(entryId), nil
+	return respAsBulkString(rawId), nil
 }
