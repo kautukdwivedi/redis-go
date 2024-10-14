@@ -195,16 +195,34 @@ func (s *Stream) findEntries(start, end string) ([]*StreamEntry, error) {
 		entryIdMillis := entry.ID.MillisTime
 		entryIdSeqNr := entry.ID.SequenceNr
 
+		startMillisEquality := func() bool {
+			if entryIdMillis == *startMillis {
+				if entryIdSeqNr >= *startSeqNr {
+					result = append(result, entry)
+				}
+				return true
+			}
+			return false
+		}
+
+		endMillisEquality := func() bool {
+			if entryIdMillis == *endMillis {
+				if entryIdSeqNr <= *endSeqNr {
+					result = append(result, entry)
+				}
+				return true
+			}
+			return false
+		}
+
 		if startMillis == nil {
 			if entryIdMillis < *endMillis {
 				result = append(result, entry)
 				continue
 			}
-			if entryIdMillis == *endMillis {
-				if entryIdSeqNr <= *endSeqNr {
-					result = append(result, entry)
-				}
-			}
+
+			endMillisEquality()
+
 			continue
 		}
 
@@ -213,11 +231,9 @@ func (s *Stream) findEntries(start, end string) ([]*StreamEntry, error) {
 				result = append(result, entry)
 				continue
 			}
-			if entryIdMillis == *startMillis {
-				if startSeqNr == nil || entryIdSeqNr >= *startSeqNr {
-					result = append(result, entry)
-				}
-			}
+
+			startMillisEquality()
+
 			continue
 		}
 
@@ -227,17 +243,11 @@ func (s *Stream) findEntries(start, end string) ([]*StreamEntry, error) {
 				continue
 			}
 
-			if entryIdMillis == *startMillis {
-				if entryIdSeqNr >= *startSeqNr {
-					result = append(result, entry)
-				}
+			if startMillisEquality() {
 				continue
 			}
 
-			if entryIdMillis == *endMillis {
-				if entryIdSeqNr <= *endSeqNr {
-					result = append(result, entry)
-				}
+			if endMillisEquality() {
 				continue
 			}
 		}
