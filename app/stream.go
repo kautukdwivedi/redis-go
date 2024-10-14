@@ -193,14 +193,31 @@ func (s *Stream) findEntries(start, end string) ([]*StreamEntry, error) {
 
 	for _, entry := range s.Entries {
 		entryIdMillis := entry.ID.MillisTime
+		entryIdSeqNr := entry.ID.SequenceNr
 
-		if startMillis == nil && entryIdMillis <= *endMillis {
-			result = append(result, entry)
+		if startMillis == nil {
+			if entryIdMillis < *endMillis {
+				result = append(result, entry)
+				continue
+			}
+			if entryIdMillis == *endMillis {
+				if entryIdSeqNr <= *endSeqNr {
+					result = append(result, entry)
+				}
+			}
 			continue
 		}
 
-		if endMillis == nil && entryIdMillis >= *startMillis {
-			result = append(result, entry)
+		if endMillis == nil {
+			if entryIdMillis > *startMillis {
+				result = append(result, entry)
+				continue
+			}
+			if entryIdMillis == *startMillis {
+				if startSeqNr == nil || entryIdSeqNr >= *startSeqNr {
+					result = append(result, entry)
+				}
+			}
 			continue
 		}
 
@@ -210,20 +227,16 @@ func (s *Stream) findEntries(start, end string) ([]*StreamEntry, error) {
 				continue
 			}
 
-			entryIdSeqNr := entry.ID.SequenceNr
-
 			if entryIdMillis == *startMillis {
-				if startSeqNr == nil || entryIdSeqNr >= *startSeqNr {
+				if entryIdSeqNr >= *startSeqNr {
 					result = append(result, entry)
-					continue
 				}
 				continue
 			}
 
 			if entryIdMillis == *endMillis {
-				if endSeqNr == nil || entryIdSeqNr <= *endSeqNr {
+				if entryIdSeqNr <= *endSeqNr {
 					result = append(result, entry)
-					continue
 				}
 				continue
 			}
