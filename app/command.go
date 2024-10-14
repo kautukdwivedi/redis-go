@@ -29,8 +29,8 @@ func (c *command) parse() {
 		if idx%2 == 0 || len(piece) == 0 {
 			continue
 		}
-		if IsUpper(piece, true) {
-			namePieces = append(namePieces, piece)
+		if IsUpper(piece, true) || piece == "xadd" || piece == "xrange" {
+			namePieces = append(namePieces, strings.ToUpper(piece))
 		} else {
 			c.args = append(c.args, piece)
 		}
@@ -38,7 +38,7 @@ func (c *command) parse() {
 
 	c.name = strings.Join(namePieces, " ")
 	switch c.name {
-	case "ECHO", "GET", "KEYS", "TYPE":
+	case "ECHO", "GET", "KEYS", "TYPE", "XRANGE":
 		c.isQueable = true
 	case "INCR", "SET", "XADD":
 		c.isQueable = true

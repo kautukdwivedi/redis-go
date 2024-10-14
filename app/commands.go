@@ -90,6 +90,8 @@ func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byt
 		return s.handleCommandType(cmd.args)
 	case "XADD":
 		return s.handleCommandXADD(cmd.args)
+	case "XRANGE":
+		return s.handleCommandXRANGE(cmd.args)
 	default:
 		return nil, nil
 	}
@@ -111,6 +113,8 @@ func (s *server) handleCommandOnSlave(client *Client, cmd *command) (resp []byte
 		resp, err = s.handleCommandIncr(cmd.args)
 	case "TYPE":
 		resp, err = s.handleCommandType(cmd.args)
+	case "XRANGE":
+		resp, err = s.handleCommandXRANGE(cmd.args)
 	}
 
 	if err == nil {

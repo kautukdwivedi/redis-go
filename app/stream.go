@@ -13,6 +13,8 @@ var (
 	ErrInvalidStreamEntrId                    = errors.New("is invalid")
 	ErrStreamEntryIdSmallerThanZero           = errors.New("must be greater than 0-0")
 	ErrStreamEntryIdEqualOrSmallerThanTopItem = errors.New("is equal or smaller than the target stream top item")
+	ErrInvalidStartIndex                      = errors.New("invalid start index")
+	ErrInvalidEndIndex                        = errors.New("invalid end index")
 )
 
 type Stream struct {
@@ -135,6 +137,102 @@ func (s *Stream) findEntryByMillis(millis int) *StreamEntry {
 	return nil
 }
 
+func (s *Stream) findEntries(start, end string) ([]*StreamEntry, error) {
+	if s.isEmpty() {
+		return s.Entries, nil
+	}
+
+	var startMillis *int
+	var startSeqNr *int
+
+	var endMillis *int
+	var endSeqNr *int
+
+	updateStartMillis := func() error {
+		startMs, startNr, err := parseStreamEntryId(start)
+		if err != nil {
+			return err
+		}
+		startMillis = startMs
+		startSeqNr = startNr
+		return nil
+	}
+
+	updateEndMillis := func() error {
+		endMs, endNr, err := parseStreamEntryId(end)
+		if err != nil {
+			return err
+		}
+		endMillis = endMs
+		endSeqNr = endNr
+		return nil
+	}
+
+	if start == "-" {
+		err := updateEndMillis()
+		if err != nil {
+			return nil, err
+		}
+	} else if end == "+" {
+		err := updateStartMillis()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		err := updateStartMillis()
+		if err != nil {
+			return nil, err
+		}
+		err = updateEndMillis()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	result := make([]*StreamEntry, 0, len(s.Entries))
+
+	for _, entry := range s.Entries {
+		entryIdMillis := entry.ID.MillisTime
+
+		if startMillis == nil && entryIdMillis <= *endMillis {
+			result = append(result, entry)
+			continue
+		}
+
+		if endMillis == nil && entryIdMillis >= *startMillis {
+			result = append(result, entry)
+			continue
+		}
+
+		if startMillis != nil && endMillis != nil {
+			if entryIdMillis > *startMillis && entryIdMillis < *endMillis {
+				result = append(result, entry)
+				continue
+			}
+
+			entryIdSeqNr := entry.ID.SequenceNr
+
+			if entryIdMillis == *startMillis {
+				if startSeqNr == nil || entryIdSeqNr >= *startSeqNr {
+					result = append(result, entry)
+					continue
+				}
+				continue
+			}
+
+			if entryIdMillis == *endMillis {
+				if endSeqNr == nil || entryIdSeqNr <= *endSeqNr {
+					result = append(result, entry)
+					continue
+				}
+				continue
+			}
+		}
+	}
+
+	return result, nil
+}
+
 func (e *StreamEntry) AddData(key, val string) {
 	e.dataMu.Lock()
 	defer e.dataMu.Unlock()
@@ -144,4 +242,29 @@ func (e *StreamEntry) AddData(key, val string) {
 
 func (id *StreamEntryId) String() string {
 	return fmt.Sprintf("%d-%d", id.MillisTime, id.SequenceNr)
+}
+
+func parseStreamEntryId(id string) (millis *int, seqNr *int, err error) {
+	pieces := strings.Split(id, "-")
+
+	if len(pieces) > 2 {
+		return nil, nil, ErrInvalidStreamEntrId
+	}
+
+	ms, err := strconv.Atoi(pieces[0])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var nr *int
+
+	if len(pieces) == 2 {
+		n, err := strconv.Atoi(pieces[1])
+		if err != nil {
+			return nil, nil, err
+		}
+		nr = &n
+	}
+
+	return &ms, nr, nil
 }
