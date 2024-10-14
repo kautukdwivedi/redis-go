@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 )
 
@@ -20,28 +21,44 @@ func (c *command) bytesLength() int {
 	return len(c.rawBytes)
 }
 
-func (c *command) parse() {
+func (c *command) parse() error {
 	pieces := strings.Split(string(c.rawBytes), carriageReturn())[1:]
 
-	namePieces := make([]string, 0, 2)
+	cleanCmdPieces := make([]string, 0, len(pieces)/2)
 
 	for idx, piece := range pieces {
-		if idx%2 == 0 || len(piece) == 0 {
-			continue
-		}
-		if IsUpper(piece, true) || piece == "xadd" || piece == "xrange" {
-			namePieces = append(namePieces, strings.ToUpper(piece))
-		} else {
-			c.args = append(c.args, piece)
+		if idx%2 != 0 {
+			cleanCmdPieces = append(cleanCmdPieces, piece)
 		}
 	}
 
-	c.name = strings.Join(namePieces, " ")
+	cleanCmd := strings.ToLower(strings.Join(cleanCmdPieces, " "))
+
+	var matchedCmd string
+	for _, supportedCmd := range supportedCommands {
+		if strings.HasPrefix(cleanCmd, supportedCmd) && len(matchedCmd) < len(supportedCmd) {
+			matchedCmd = supportedCmd
+		}
+	}
+
+	if len(matchedCmd) == 0 {
+		return errors.New("command not supported")
+	}
+
+	c.name = matchedCmd
+
 	switch c.name {
-	case "ECHO", "GET", "KEYS", "TYPE", "XRANGE":
+	case cmdEcho, cmdGet, cmdKeys, cmdType, cmdXRange:
 		c.isQueable = true
-	case "INCR", "SET", "XADD":
+	case cmdIncr, cmdSet, cmdXAdd:
 		c.isQueable = true
 		c.isWrite = true
 	}
+
+	if len(cleanCmd) > len(matchedCmd) {
+		args := cleanCmd[len(matchedCmd)+1:]
+		c.args = strings.Split(args, " ")
+	}
+
+	return nil
 }

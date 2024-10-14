@@ -12,8 +12,55 @@ const (
 	integer    Type = ':'
 )
 
+const (
+	cmdPing           = "ping"
+	cmdEcho           = "echo"
+	cmdGet            = "get"
+	cmdSet            = "set"
+	cmdInfo           = "info"
+	cmdReplConf       = "replconf"
+	cmdReplConfGetAck = "replconf getack"
+	cmdReplConfAck    = "replconf ack"
+	cmdPsync          = "psync"
+	cmdWait           = "wait"
+	cmdConfigGet      = "config get"
+	cmdKeys           = "keys"
+	cmdIncr           = "incr"
+	cmdMulti          = "multi"
+	cmdExec           = "exec"
+	cmdDiscard        = "discard"
+	cmdType           = "type"
+	cmdXAdd           = "xadd"
+	cmdXRange         = "xrange"
+)
+
+var supportedCommands = []string{
+	cmdPing,
+	cmdEcho,
+	cmdGet,
+	cmdSet,
+	cmdInfo,
+	cmdReplConf,
+	cmdReplConfGetAck,
+	cmdReplConfAck,
+	cmdPsync,
+	cmdWait,
+	cmdConfigGet,
+	cmdKeys,
+	cmdIncr,
+	cmdMulti,
+	cmdExec,
+	cmdDiscard,
+	cmdType,
+	cmdXAdd,
+	cmdXRange,
+}
+
 func (s *server) handleCommand(client *Client, cmd *command) error {
-	cmd.parse()
+	err := cmd.parse()
+	if err != nil {
+		return err
+	}
 
 	if client.Transaction.isOpen && cmd.isQueable {
 		client.Transaction.Queue = append(client.Transaction.Queue, cmd)
@@ -25,7 +72,6 @@ func (s *server) handleCommand(client *Client, cmd *command) error {
 	}
 
 	var resp []byte
-	var err error
 
 	if s.isMaster() {
 		resp, err = s.handleCommandOnMaster(client, cmd)
@@ -56,41 +102,41 @@ func (s *server) handleCommand(client *Client, cmd *command) error {
 
 func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byte, err error) {
 	switch cmd.name {
-	case "PING":
+	case cmdPing:
 		return nil, s.handleCommandPing(client)
-	case "ECHO":
+	case cmdEcho:
 		return s.handleCommandEcho(cmd.args)
-	case "GET":
+	case cmdGet:
 		return s.handleCommandGet(cmd.args)
-	case "SET":
+	case cmdSet:
 		return s.handleCommandSetOnMaster(cmd.args)
-	case "INFO":
+	case cmdInfo:
 		return nil, s.handleCommandInfo(client, cmd.args)
-	case "REPLCONF":
+	case cmdReplConf:
 		return nil, s.handleCommandReplconf(client)
-	case "REPLCONF ACK":
+	case cmdReplConfAck:
 		return nil, s.handleCommandReplconfAck()
-	case "PSYNC":
+	case cmdPsync:
 		return nil, s.handleCommandPsync(client)
-	case "WAIT":
+	case cmdWait:
 		return nil, s.handleCommandWait(client, cmd.args)
-	case "CONFIG GET":
+	case cmdConfigGet:
 		return s.handleCommandConfigGet(cmd.args)
-	case "KEYS":
+	case cmdKeys:
 		return s.handleCommandKeys()
-	case "INCR":
+	case cmdIncr:
 		return s.handleCommandIncr(cmd.args)
-	case "MULTI":
+	case cmdMulti:
 		return nil, s.handleCommandMulti(client)
-	case "EXEC":
+	case cmdExec:
 		return nil, s.handleCommandExec(client)
-	case "DISCARD":
+	case cmdDiscard:
 		return nil, s.handleCommandDiscard(client)
-	case "TYPE":
+	case cmdType:
 		return s.handleCommandType(cmd.args)
-	case "XADD":
+	case cmdXAdd:
 		return s.handleCommandXADD(cmd.args)
-	case "XRANGE":
+	case cmdXRange:
 		return s.handleCommandXRANGE(cmd.args)
 	default:
 		return nil, nil
@@ -99,21 +145,21 @@ func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byt
 
 func (s *server) handleCommandOnSlave(client *Client, cmd *command) (resp []byte, err error) {
 	switch cmd.name {
-	case "ECHO":
+	case cmdEcho:
 		resp, err = s.handleCommandEcho(cmd.args)
-	case "GET":
+	case cmdGet:
 		resp, err = s.handleCommandGet(cmd.args)
-	case "SET":
+	case cmdSet:
 		resp, err = s.handleCommandSetOnSlave(cmd.args)
-	case "INFO":
+	case cmdInfo:
 		err = s.handleCommandInfo(client, cmd.args)
-	case "REPLCONF GETACK":
+	case cmdReplConfGetAck:
 		err = s.handleCommandReplconfGetAck(client)
-	case "INCR":
+	case cmdIncr:
 		resp, err = s.handleCommandIncr(cmd.args)
-	case "TYPE":
+	case cmdType:
 		resp, err = s.handleCommandType(cmd.args)
-	case "XRANGE":
+	case cmdXRange:
 		resp, err = s.handleCommandXRANGE(cmd.args)
 	}
 
