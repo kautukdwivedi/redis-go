@@ -32,6 +32,7 @@ const (
 	cmdType           = "type"
 	cmdXAdd           = "xadd"
 	cmdXRange         = "xrange"
+	cmdXRead          = "xread"
 )
 
 var supportedCommands = []string{
@@ -54,6 +55,7 @@ var supportedCommands = []string{
 	cmdType,
 	cmdXAdd,
 	cmdXRange,
+	cmdXRead,
 }
 
 func (s *server) handleCommand(client *Client, cmd *command) error {
@@ -138,6 +140,8 @@ func (s *server) handleCommandOnMaster(client *Client, cmd *command) (resp []byt
 		return s.handleCommandXADD(cmd.args)
 	case cmdXRange:
 		return s.handleCommandXRANGE(cmd.args)
+	case cmdXRead:
+		return s.handleCommandXREAD(cmd.args)
 	default:
 		return nil, nil
 	}
@@ -161,6 +165,8 @@ func (s *server) handleCommandOnSlave(client *Client, cmd *command) (resp []byte
 		resp, err = s.handleCommandType(cmd.args)
 	case cmdXRange:
 		resp, err = s.handleCommandXRANGE(cmd.args)
+	case cmdXRead:
+		resp, err = s.handleCommandXREAD(cmd.args)
 	}
 
 	if err == nil {

@@ -11,7 +11,7 @@ func (s *server) handleCommandXRANGE(args []string) ([]byte, error) {
 	start := args[1]
 	end := args[2]
 
-	entries, err := stream.findEntries(start, end)
+	entries, err := stream.findEntries(&start, &end)
 	if err != nil {
 		return nil, err
 	}
@@ -19,23 +19,7 @@ func (s *server) handleCommandXRANGE(args []string) ([]byte, error) {
 	entriesBytes := make([][]byte, 0, len(entries))
 
 	for _, entry := range entries {
-		vals := make([]string, 0, len(entry.Data)*2)
-		for key, val := range entry.Data {
-			vals = append(vals, key)
-			vals = append(vals, val)
-		}
-
-		valsResp, err := respAsArray(vals)
-		if err != nil {
-			return nil, err
-		}
-
-		entryBytes := make([][]byte, 0)
-
-		entryBytes = append(entryBytes, respAsBulkString(entry.ID.String()))
-		entryBytes = append(entryBytes, valsResp)
-
-		entryBytesResp, err := respAsByteArrays(entryBytes)
+		entryBytesResp, err := entry.encodeToResp()
 		if err != nil {
 			return nil, err
 		}
