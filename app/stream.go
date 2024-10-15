@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -168,6 +169,16 @@ func (s *Stream) findEntries(start, end *string) ([]*StreamEntry, error) {
 	}
 
 	return result, nil
+}
+
+func (s *Stream) findEntriesNewerThan(t time.Time) []*StreamEntry {
+	result := make([]*StreamEntry, 0, len(s.Entries))
+	for _, entry := range s.Entries {
+		if entry.Created.After(t) {
+			result = append(result, entry)
+		}
+	}
+	return result
 }
 
 func parseStreamEntryId(id string) (millis *int, seqNr *int, err error) {

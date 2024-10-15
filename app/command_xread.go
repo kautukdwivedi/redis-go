@@ -78,9 +78,17 @@ func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 			stream.IsBlocking = false
 		}
 
-		entries, err := stream.findEntries(&streamKeyAndId.id, nil)
-		if err != nil {
-			return nil, err
+		var entries []*StreamEntry
+
+		if createdAfter != nil && streamKeyAndId.id == "$" {
+			entries = stream.findEntriesNewerThan(*createdAfter)
+		} else {
+			e, err := stream.findEntries(&streamKeyAndId.id, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			entries = e
 		}
 
 		if len(entries) == 0 {
