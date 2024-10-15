@@ -1,11 +1,15 @@
 package main
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type StreamEntry struct {
-	ID     *StreamEntryId
-	Data   map[string]string
-	dataMu *sync.Mutex
+	ID      *StreamEntryId
+	Data    map[string]string
+	Created time.Time
+	dataMu  *sync.Mutex
 }
 
 func (s *Stream) NewStreamEntry(id string) (*StreamEntry, error) {
@@ -15,9 +19,10 @@ func (s *Stream) NewStreamEntry(id string) (*StreamEntry, error) {
 	}
 
 	return &StreamEntry{
-		ID:     entryId,
-		Data:   make(map[string]string),
-		dataMu: &sync.Mutex{},
+		ID:      entryId,
+		Data:    make(map[string]string),
+		Created: time.Now().UTC(),
+		dataMu:  &sync.Mutex{},
 	}, nil
 }
 

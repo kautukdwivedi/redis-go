@@ -3,13 +3,26 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
+	var blockingMillis *int
 	streamsArgIdx := -1
+	
 	for idx, arg := range args {
-		if strings.ToLower(arg) == "streams" {
+		lowerArg := strings.ToLower(arg)
+
+		if lowerArg == "block" {
+			blockingMillisInt, err := strconv.Atoi(args[idx+1])
+			if err != nil {
+				return nil, err
+			}
+
+			blockingMillis = &blockingMillisInt
+		} else if strings.ToLower(arg) == "streams" {
 			streamsArgIdx = idx
 			break
 		}
@@ -17,6 +30,17 @@ func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 
 	if streamsArgIdx == -1 {
 		return nil, errors.New("invalid XREAD command - \"streams\" argument not found")
+	}
+
+	var createdAfter *time.Time
+
+	if blockingMillis != nil {
+		if *blockingMillis > 0 {
+			now := time.Now().UTC()
+			createdAfter = &now
+			timer := time.After(time.Duration(*blockingMillis) * time.Millisecond)
+			<-timer
+		}
 	}
 
 	streamArgs := args[streamsArgIdx+1:]
@@ -53,15 +77,27 @@ func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 			return nil, err
 		}
 
+		if len(entries) == 0 {
+			continue
+		}
+
 		entriesBytes := make([][]byte, 0, len(entries))
 
 		for _, entry := range entries {
+			if createdAfter != nil && entry.Created.Before(*createdAfter) {
+				continue
+			}
+
 			entryBytesResp, err := entry.encodeToResp()
 			if err != nil {
 				return nil, err
 			}
 
 			entriesBytes = append(entriesBytes, entryBytesResp)
+		}
+
+		if len(entriesBytes) == 0 {
+			continue
 		}
 
 		streamBytes := make([][]byte, 0, 2)
@@ -80,6 +116,10 @@ func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 		}
 
 		streamBytesResp = append(streamBytesResp, encodedStreamBytes)
+	}
+
+	if len(streamBytesResp) == 0 {
+		return respAsBulkString(""), nil
 	}
 
 	return respAsByteArrays(streamBytesResp)
