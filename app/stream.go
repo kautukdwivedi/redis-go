@@ -15,14 +15,17 @@ var (
 )
 
 type Stream struct {
-	Key     string
-	Entries []*StreamEntry
+	Key            string
+	Entries        []*StreamEntry
+	EntryAddedChan chan bool
+	IsBlocking     bool
 }
 
 func NewStream(key string) *Stream {
 	return &Stream{
-		Key:     key,
-		Entries: make([]*StreamEntry, 0),
+		Key:            key,
+		Entries:        make([]*StreamEntry, 0),
+		EntryAddedChan: make(chan bool),
 	}
 }
 

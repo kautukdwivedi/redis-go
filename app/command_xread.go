@@ -11,7 +11,7 @@ import (
 func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 	var blockingMillis *int
 	streamsArgIdx := -1
-	
+
 	for idx, arg := range args {
 		lowerArg := strings.ToLower(arg)
 
@@ -30,17 +30,6 @@ func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 
 	if streamsArgIdx == -1 {
 		return nil, errors.New("invalid XREAD command - \"streams\" argument not found")
-	}
-
-	var createdAfter *time.Time
-
-	if blockingMillis != nil {
-		if *blockingMillis > 0 {
-			now := time.Now().UTC()
-			createdAfter = &now
-			timer := time.After(time.Duration(*blockingMillis) * time.Millisecond)
-			<-timer
-		}
 	}
 
 	streamArgs := args[streamsArgIdx+1:]
@@ -63,6 +52,17 @@ func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 		return nil, errors.New("no streams to read from")
 	}
 
+	var createdAfter *time.Time
+
+	if blockingMillis != nil {
+		now := time.Now().UTC()
+		createdAfter = &now
+		if *blockingMillis > 0 {
+			timer := time.After(time.Duration(*blockingMillis) * time.Millisecond)
+			<-timer
+		}
+	}
+
 	streamBytesResp := make([][]byte, 0, len(streamKeyAndIds))
 
 	for _, streamKeyAndId := range streamKeyAndIds {
@@ -70,6 +70,12 @@ func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 		if stream == nil {
 			fmt.Println("No streams found for key: ", streamKeyAndId.key)
 			continue
+		}
+
+		if blockingMillis != nil && *blockingMillis == 0 {
+			stream.IsBlocking = true
+			<-stream.EntryAddedChan
+			stream.IsBlocking = false
 		}
 
 		entries, err := stream.findEntries(&streamKeyAndId.id, nil)
