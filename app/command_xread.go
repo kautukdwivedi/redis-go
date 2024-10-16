@@ -60,6 +60,8 @@ func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 		if *blockingMillis > 0 {
 			timer := time.After(time.Duration(*blockingMillis) * time.Millisecond)
 			<-timer
+		} else if *blockingMillis == 0 {
+			s.streams.blockAndWaitForEntryAdded()
 		}
 	}
 
@@ -70,12 +72,6 @@ func (s *server) handleCommandXREAD(args []string) ([]byte, error) {
 		if stream == nil {
 			fmt.Println("No streams found for key: ", streamKeyAndId.key)
 			continue
-		}
-
-		if blockingMillis != nil && *blockingMillis == 0 {
-			stream.IsBlocking = true
-			<-stream.EntryAddedChan
-			stream.IsBlocking = false
 		}
 
 		var entries []*StreamEntry

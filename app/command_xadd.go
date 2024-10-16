@@ -8,7 +8,7 @@ func (s *server) handleCommandXADD(args []string) ([]byte, error) {
 	stream := s.findStream(streamKey)
 	if stream == nil {
 		stream = NewStream(streamKey)
-		s.streams = append(s.streams, stream)
+		s.streams.Streams = append(s.streams.Streams, stream)
 	}
 
 	rawId := args[1]
@@ -18,8 +18,8 @@ func (s *server) handleCommandXADD(args []string) ([]byte, error) {
 	}
 
 	stream.AddEntry(entry)
-	if stream.IsBlocking {
-		stream.EntryAddedChan <- true
+	if s.streams.IsBlocking {
+		s.streams.EntryAddedChan <- true
 	}
 
 	for i := 2; i < len(args)-1; i += 2 {
